@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KSP Crime Analytics Prototype</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <div class="brand">
+          <span class="brand-mark">KSP</span>
+          <div>
+            <strong>Crime Analytics</strong>
+            <span>Investigation Command</span>
+          </div>
+        </div>
+        <nav class="nav-list">
+          <button class="nav-item active" data-view="overview" title="Dashboard">Dashboard</button>
+          <button class="nav-item" data-view="hotspots" title="Hotspots">Hotspots</button>
+          <button class="nav-item" data-view="network" title="Network">Network</button>
+          <button class="nav-item" data-view="search" title="Search">Search</button>
+          <button class="nav-item" data-view="fir" title="FIR Analytics">FIR Analytics</button>
+          <button class="nav-item" data-view="assistant" title="AI Assistant">AI Assistant</button>
+        </nav>
+        <div class="status-panel">
+          <span class="status-dot"></span>
+          <div>
+            <strong>Live monitoring</strong>
+            <span>4 active alerts</span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Karnataka State Police data prototype</p>
+            <h1 id="view-title">Investigation Dashboard</h1>
+          </div>
+          <div class="header-actions">
+            <label class="select-wrap">
+              <span>District</span>
+              <select id="district-filter">
+                <option value="All">All districts</option>
+              </select>
+            </label>
+            <button id="simulate-alert" class="primary-action" type="button">Run Alert Scan</button>
+          </div>
+        </header>
+
+        <section class="view active" id="overview">
+          <section class="panel hero-banner">
+            <div class="hero-copy">
+              <p class="eyebrow">AI-driven crime analytics &amp; visualization platform</p>
+              <h2>From fragmented records to actionable intelligence.</h2>
+              <p>Unify FIRs, offender links, and geospatial risk signals into one operational command center for Karnataka State Police.</p>
+            </div>
+            <div class="hero-chips">
+              <span class="hero-chip">Predictive hotspots</span>
+              <span class="hero-chip">Network link analysis</span>
+              <span class="hero-chip">AI-assisted triage</span>
+            </div>
+          </section>
+          <div class="kpi-grid" id="kpi-grid"></div>
+          <div class="analytics-grid">
+            <section class="panel span-2">
+              <div class="panel-header">
+                <div>
+                  <h2>Crime Trend Forecast</h2>
+                  <p>Reported incidents with 30-day projection</p>
+                </div>
+                <span class="risk-pill high">Predictive</span>
+              </div>
+              <canvas id="trend-chart" height="280" aria-label="Crime trend chart"></canvas>
+            </section>
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>District Comparison</h2>
+                  <p>Case volume by district</p>
+                </div>
+              </div>
+              <div id="district-bars" class="bar-list"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>Pattern Detection</h2>
+                  <p>Serial signals from recent FIRs</p>
+                </div>
+              </div>
+              <div id="patterns" class="signal-list"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>Real-time Alerts</h2>
+                  <p>Thresholds and anomaly flags</p>
+                </div>
+              </div>
+              <div id="alerts" class="alert-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="hotspots">
+          <div class="split-layout">
+            <section class="panel map-panel">
+              <div class="panel-header">
+                <div>
+                  <h2>Hotspot Detection</h2>
+                  <p>High, medium, and low risk zones</p>
+                </div>
+                <span class="risk-pill high">GIS Prototype</span>
+              </div>
+              <div id="map" class="map-surface" aria-label="Karnataka hotspot map"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>Prediction Queue</h2>
+                  <p>Hotspot probability and recommended action</p>
+                </div>
+              </div>
+              <div id="prediction-list" class="case-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="network">
+          <div class="split-layout">
+            <section class="panel network-panel">
+              <div class="panel-header">
+                <div>
+                  <h2>Criminal Network Analysis</h2>
+                  <p>Suspect, vehicle, phone, and case links</p>
+                </div>
+              </div>
+              <svg id="network-graph" viewBox="0 0 760 520" role="img" aria-label="Criminal relationship graph"></svg>
+            </section>
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>Similar Crime Finder</h2>
+                  <p>NLP-style matching by modus operandi</p>
+                </div>
+              </div>
+              <div id="similar-cases" class="case-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="search">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>Search Portal</h2>
+                <p>Search by case ID, suspect, vehicle, phone, location, or offence</p>
+              </div>
+            </div>
+            <input id="case-search" class="search-input" type="search" placeholder="Try CASE-1047, KA-05-MX-2219, 98450, burglary..." />
+            <div id="case-results" class="results-grid"></div>
+          </section>
+        </section>
+
+        <section class="view" id="fir">
+          <div class="split-layout">
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>AI Case Summary</h2>
+                  <p>Paste FIR text to extract entities and investigation cues</p>
+                </div>
+              </div>
+              <textarea id="fir-input" class="fir-input" spellcheck="false"></textarea>
+              <button id="summarize-fir" class="primary-action" type="button">Summarize FIR</button>
+            </section>
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>Extracted Intelligence</h2>
+                  <p>Entities, timeline, and risk tags</p>
+                </div>
+              </div>
+              <div id="fir-summary" class="summary-output"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="assistant">
+          <div class="split-layout">
+            <section class="panel chat-panel">
+              <div class="panel-header">
+                <div>
+                  <h2>AI Chatbot</h2>
+                  <p>Natural language queries over prototype data</p>
+                </div>
+              </div>
+              <div id="chat-log" class="chat-log"></div>
+              <form id="chat-form" class="chat-form">
+                <input id="chat-input" type="text" placeholder="Ask: Which district has the highest vehicle theft risk?" />
+                <button class="primary-action" type="submit">Ask</button>
+              </form>
+            </section>
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>Timeline View</h2>
+                  <p>Chronological case investigation</p>
+                </div>
+              </div>
+              <div id="timeline" class="timeline"></div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="app.js"></script>
+  </body>
+</html>
