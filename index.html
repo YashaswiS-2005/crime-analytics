@@ -160,8 +160,42 @@
                 <p>Search by case ID, suspect, vehicle, phone, location, or offence</p>
               </div>
             </div>
-            <input id="case-search" class="search-input" type="search" placeholder="Try CASE-1047, KA-05-MX-2219, 98450, burglary..." />
-            <div id="case-results" class="results-grid"></div>
+            <div class="filter-row">
+              <input id="case-search" class="search-input" type="search" placeholder="Try CASE-1047, KA-05-MX-2219, 98450, burglary..." />
+              <label class="select-wrap">
+                <span>Status</span>
+                <select id="status-filter">
+                  <option value="">All statuses</option>
+                  <option value="Open">Open</option>
+                  <option value="In progress">In progress</option>
+                  <option value="Closed">Closed</option>
+                </select>
+              </label>
+              <label class="select-wrap">
+                <span>Risk</span>
+                <select id="risk-filter">
+                  <option value="">All risk levels</option>
+                  <option value="High">High</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Low">Low</option>
+                </select>
+              </label>
+            </div>
+            <div id="search-status" class="status-line" aria-live="polite"></div>
+            <div class="split-layout">
+              <div id="case-results" class="results-grid"></div>
+              <aside id="case-detail" class="case-detail">
+                <div class="panel-header">
+                  <div>
+                    <h2>Case detail</h2>
+                    <p>Select a search result to inspect the case.</p>
+                  </div>
+                </div>
+                <div id="detail-content" class="detail-content">
+                  <p class="muted">No case selected.</p>
+                </div>
+              </aside>
+            </div>
           </section>
         </section>
 
@@ -175,15 +209,11 @@
                 </div>
               </div>
               <textarea id="fir-input" class="fir-input" spellcheck="false"></textarea>
-              <button id="summarize-fir" class="primary-action" type="button">Summarize FIR</button>
-            </section>
-            <section class="panel">
-              <div class="panel-header">
-                <div>
-                  <h2>Extracted Intelligence</h2>
-                  <p>Entities, timeline, and risk tags</p>
-                </div>
-              </div>
+              <button id="summarize-fir" class="primary-action" type="button">
+                <span class="button-spinner" aria-hidden="true"></span>
+                Summarize FIR
+              </button>
+              <div id="fir-status" class="status-line" aria-live="polite"></div>
               <div id="fir-summary" class="summary-output"></div>
             </section>
           </div>

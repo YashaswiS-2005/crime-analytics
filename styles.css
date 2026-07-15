@@ -222,6 +222,49 @@ select {
   background: #0a7274;
 }
 
+.primary-action:disabled,
+.primary-action.loading {
+  opacity: 0.75;
+  cursor: default;
+}
+
+.button-spinner {
+  display: none;
+  width: 16px;
+  height: 16px;
+  margin-right: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+  vertical-align: middle;
+}
+
+.primary-action.loading .button-spinner {
+  display: inline-block;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.status-line {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.status-line.loading {
+  color: var(--accent);
+}
+
+.status-line.error {
+  color: var(--danger);
+}
+
 .view {
   display: none;
 }
@@ -398,11 +441,47 @@ canvas {
 .alert,
 .case-card,
 .summary-card,
-.timeline-item {
+.timeline-item,
+.case-detail {
   border: 1px solid var(--line);
   background: var(--surface-2);
   border-radius: 8px;
   padding: 12px;
+}
+
+.case-detail {
+  min-width: 280px;
+  max-width: 420px;
+}
+
+.case-detail .detail-content {
+  display: grid;
+  gap: 14px;
+}
+
+.case-detail .detail-row {
+  display: grid;
+  gap: 6px;
+}
+
+.case-detail .detail-row strong {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.case-detail .detail-row span {
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.case-card {
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.case-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
 }
 
 .signal p,
@@ -512,11 +591,31 @@ canvas {
   stroke-width: 4;
 }
 
-.search-input {
+..search-input {
   width: 100%;
   min-height: 50px;
   padding: 0 16px;
-  margin-bottom: 16px;
+}
+
+.filter-row {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+  grid-template-columns: minmax(0, 1.5fr) minmax(180px, 1fr) minmax(180px, 1fr);
+}
+
+.status-update-row {
+  display: grid;
+  gap: 10px;
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-top: 6px;
+}
+
+.summary-output {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
 }
 
 .results-grid {

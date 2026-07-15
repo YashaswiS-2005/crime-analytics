@@ -1,99 +1,128 @@
-const districts = [
-  { name: "Bengaluru Urban", cases: 842, solved: 64, hotspot: 91, growth: 12 },
-  { name: "Mysuru", cases: 316, solved: 71, hotspot: 63, growth: 5 },
-  { name: "Mangaluru", cases: 282, solved: 68, hotspot: 59, growth: -2 },
-  { name: "Belagavi", cases: 247, solved: 62, hotspot: 55, growth: 8 },
-  { name: "Hubballi-Dharwad", cases: 231, solved: 66, hotspot: 51, growth: 4 },
-  { name: "Kalaburagi", cases: 196, solved: 58, hotspot: 49, growth: 9 },
-];
+const defaultData = {
+  districts: [
+    { name: "Bengaluru Urban", cases: 842, solved: 64, hotspot: 91, growth: 12 },
+    { name: "Mysuru", cases: 316, solved: 71, hotspot: 63, growth: 5 },
+    { name: "Mangaluru", cases: 282, solved: 68, hotspot: 59, growth: -2 },
+    { name: "Belagavi", cases: 247, solved: 62, hotspot: 55, growth: 8 },
+    { name: "Hubballi-Dharwad", cases: 231, solved: 66, hotspot: 51, growth: 4 },
+    { name: "Kalaburagi", cases: 196, solved: 58, hotspot: 49, growth: 9 },
+  ],
+  cases: [
+    {
+      id: "CASE-1047",
+      district: "Bengaluru Urban",
+      offence: "Vehicle theft",
+      suspect: "Ravi K",
+      vehicle: "KA-05-MX-2219",
+      phone: "9845011278",
+      risk: "High",
+      status: "Open",
+      summary: "Two-wheeler thefts near transit parking with duplicate key access.",
+    },
+    {
+      id: "CASE-1032",
+      district: "Mysuru",
+      offence: "Chain snatching",
+      suspect: "Imran P",
+      vehicle: "KA-09-HH-4410",
+      phone: "9900824411",
+      risk: "Medium",
+      status: "In progress",
+      summary: "Morning incidents targeting pedestrians near market approach roads.",
+    },
+    {
+      id: "CASE-1018",
+      district: "Mangaluru",
+      offence: "Cyber fraud",
+      suspect: "Unknown wallet cluster",
+      vehicle: "N/A",
+      phone: "8123459901",
+      risk: "High",
+      status: "Open",
+      summary: "UPI refund scam using rotating bank accounts and mule numbers.",
+    },
+    {
+      id: "CASE-1009",
+      district: "Belagavi",
+      offence: "Burglary",
+      suspect: "Mahesh N",
+      vehicle: "KA-22-PA-7801",
+      phone: "7760992215",
+      risk: "Medium",
+      status: "Closed",
+      summary: "Night break-ins at closed provision stores along highway edge.",
+    },
+    {
+      id: "CASE-0998",
+      district: "Hubballi-Dharwad",
+      offence: "Robbery",
+      suspect: "Sandeep V",
+      vehicle: "KA-25-QA-1142",
+      phone: "9036117844",
+      risk: "High",
+      status: "In progress",
+      summary: "Repeat pattern near cash collection routes after business closing.",
+    },
+    {
+      id: "CASE-0986",
+      district: "Kalaburagi",
+      offence: "Narcotics",
+      suspect: "Asif R",
+      vehicle: "KA-32-CM-6620",
+      phone: "7899921034",
+      risk: "Medium",
+      status: "Open",
+      summary: "Courier-linked peddling route around lodges and bus terminal.",
+    },
+  ],
+  trends: [228, 242, 219, 268, 291, 315, 337, 326, 354, 389, 402, 431],
+  hotspots: [
+    { district: "Bengaluru Urban", x: "54%", y: "68%", risk: "high", score: 91 },
+    { district: "Mysuru", x: "40%", y: "77%", risk: "medium", score: 63 },
+    { district: "Mangaluru", x: "26%", y: "64%", risk: "medium", score: 59 },
+    { district: "Belagavi", x: "33%", y: "24%", risk: "medium", score: 55 },
+    { district: "Hubballi-Dharwad", x: "43%", y: "38%", risk: "low", score: 51 },
+    { district: "Kalaburagi", x: "64%", y: "34%", risk: "low", score: 49 },
+  ],
+  alerts: [
+    "Vehicle theft rose 18% around Bengaluru metro parking clusters.",
+    "Three burglary FIRs share a late-night rear shutter entry method.",
+    "Cyber fraud complaints mention the same beneficiary account fragment.",
+    "Robbery incidents peaked within 400m of two cash collection routes.",
+  ],
+  timeline: [
+    { time: "08:20", title: "FIR registered", text: "Complainant reported vehicle theft near Majestic parking." },
+    { time: "09:05", title: "CCTV request", text: "Camera feeds requested from transit authority and nearby shops." },
+    { time: "11:40", title: "Vehicle sighting", text: "ANPR hit on KA-05-MX-2219 near Tumakuru Road." },
+    { time: "15:10", title: "Network match", text: "Phone number overlaps with suspect in CASE-0998." },
+  ],
+};
 
-const cases = [
-  {
-    id: "CASE-1047",
-    district: "Bengaluru Urban",
-    offence: "Vehicle theft",
-    suspect: "Ravi K",
-    vehicle: "KA-05-MX-2219",
-    phone: "9845011278",
-    risk: "High",
-    summary: "Two-wheeler thefts near transit parking with duplicate key access.",
-  },
-  {
-    id: "CASE-1032",
-    district: "Mysuru",
-    offence: "Chain snatching",
-    suspect: "Imran P",
-    vehicle: "KA-09-HH-4410",
-    phone: "9900824411",
-    risk: "Medium",
-    summary: "Morning incidents targeting pedestrians near market approach roads.",
-  },
-  {
-    id: "CASE-1018",
-    district: "Mangaluru",
-    offence: "Cyber fraud",
-    suspect: "Unknown wallet cluster",
-    vehicle: "N/A",
-    phone: "8123459901",
-    risk: "High",
-    summary: "UPI refund scam using rotating bank accounts and mule numbers.",
-  },
-  {
-    id: "CASE-1009",
-    district: "Belagavi",
-    offence: "Burglary",
-    suspect: "Mahesh N",
-    vehicle: "KA-22-PA-7801",
-    phone: "7760992215",
-    risk: "Medium",
-    summary: "Night break-ins at closed provision stores along highway edge.",
-  },
-  {
-    id: "CASE-0998",
-    district: "Hubballi-Dharwad",
-    offence: "Robbery",
-    suspect: "Sandeep V",
-    vehicle: "KA-25-QA-1142",
-    phone: "9036117844",
-    risk: "High",
-    summary: "Repeat pattern near cash collection routes after business closing.",
-  },
-  {
-    id: "CASE-0986",
-    district: "Kalaburagi",
-    offence: "Narcotics",
-    suspect: "Asif R",
-    vehicle: "KA-32-CM-6620",
-    phone: "7899921034",
-    risk: "Medium",
-    summary: "Courier-linked peddling route around lodges and bus terminal.",
-  },
-];
+let districts = defaultData.districts;
+let cases = defaultData.cases;
+let trends = defaultData.trends;
+let hotspots = defaultData.hotspots;
+let alerts = defaultData.alerts;
+let timeline = defaultData.timeline;
 
-const trends = [228, 242, 219, 268, 291, 315, 337, 326, 354, 389, 402, 431];
+async function loadData() {
+  try {
+    const response = await fetch('/api/data');
+    if (!response.ok) throw new Error(`API returned status ${response.status}`);
+    const data = await response.json();
 
-const hotspots = [
-  { district: "Bengaluru Urban", x: "54%", y: "68%", risk: "high", score: 91 },
-  { district: "Mysuru", x: "40%", y: "77%", risk: "medium", score: 63 },
-  { district: "Mangaluru", x: "26%", y: "64%", risk: "medium", score: 59 },
-  { district: "Belagavi", x: "33%", y: "24%", risk: "medium", score: 55 },
-  { district: "Hubballi-Dharwad", x: "43%", y: "38%", risk: "low", score: 51 },
-  { district: "Kalaburagi", x: "64%", y: "34%", risk: "low", score: 49 },
-];
+    districts = data.districts || districts;
+    cases = data.cases || cases;
+    trends = data.trends || trends;
+    hotspots = data.hotspots || hotspots;
+    alerts = data.alerts || alerts;
+    timeline = data.timeline || timeline;
 
-const alerts = [
-  "Vehicle theft rose 18% around Bengaluru metro parking clusters.",
-  "Three burglary FIRs share a late-night rear shutter entry method.",
-  "Cyber fraud complaints mention the same beneficiary account fragment.",
-  "Robbery incidents peaked within 400m of two cash collection routes.",
-];
-
-const timeline = [
-  { time: "08:20", title: "FIR registered", text: "Complainant reported vehicle theft near Majestic parking." },
-  { time: "09:05", title: "CCTV request", text: "Camera feeds requested from transit authority and nearby shops." },
-  { time: "11:40", title: "Vehicle sighting", text: "ANPR hit on KA-05-MX-2219 near Tumakuru Road." },
-  { time: "15:10", title: "Network match", text: "Phone number overlaps with suspect in CASE-0998." },
-];
+    console.info('Loaded frontend data from backend API');
+  } catch (error) {
+    console.warn('Backend API unavailable, using static fallback data.', error);
+  }
+}
 
 const firSample =
   "On 12 July 2026 at 21:30, complainant Shwetha Rao reported theft of motorcycle KA-05-MX-2219 from Majestic parking, Bengaluru. CCTV shows two males using a duplicate key. Phone number 9845011278 was seen in earlier CASE-1047 records. Suspect Ravi K may be linked to similar vehicle thefts near transit hubs.";
@@ -320,51 +349,233 @@ function renderSimilarCases() {
     .join("");
 }
 
-function renderSearch(query = "") {
-  const normalized = query.trim().toLowerCase();
-  const rows = selectedCases().filter((item) => {
-    const haystack = Object.values(item).join(" ").toLowerCase();
-    return !normalized || haystack.includes(normalized);
-  });
-  document.getElementById("case-results").innerHTML =
-    rows
-      .map(
-        (item) => `
-          <article class="case-card">
+function setStatus(id, message, statusType = '') {
+  const element = document.getElementById(id);
+  if (!element) return;
+  element.textContent = message;
+  element.classList.toggle('loading', statusType === 'loading');
+  element.classList.toggle('error', statusType === 'error');
+}
+
+async function renderSearch(query = "") {
+  const output = document.getElementById("case-results");
+  const statusId = "search-status";
+  const normalized = query.trim();
+  const statusFilter = document.getElementById("status-filter").value;
+  const riskFilter = document.getElementById("risk-filter").value;
+  const districtFilter = state.district === "All" ? "" : state.district;
+
+  setStatus(statusId, "Searching...", "loading");
+
+  try {
+    const params = new URLSearchParams({
+      q: normalized,
+      status: statusFilter,
+      risk: riskFilter,
+      district: districtFilter,
+    });
+
+    const response = await fetch(`/api/search?${params.toString()}`);
+    if (!response.ok) throw new Error(`Search API returned ${response.status}`);
+    const data = await response.json();
+    const rows = data.results || [];
+
+    if (rows.length === 0) {
+      setStatus(statusId, `No matches for '${normalized}'.`, "");
+    } else {
+      setStatus(statusId, `${rows.length} result${rows.length === 1 ? '' : 's'} found.`, "");
+    }
+
+    output.innerHTML =
+      rows
+        .map(
+          (item) => `
+          <article class="case-card" data-case-id="${item.id}">
+            <h3>${item.id} · ${item.offence}</h3>
+            <p>${item.summary}</p>
+            <div class="case-meta">
+              <span>${item.district}</span><span>${item.suspect}</span><span>${item.vehicle}</span><span>${item.risk} risk</span><span>${item.status || 'Unknown'}</span>
+            </div>
+          </article>`
+        )
+        .join("") || `<article class="case-card"><h3>No matches</h3><p>Try a case ID, phone number, vehicle registration, suspect, or offence.</p></article>`;
+  } catch (error) {
+    console.warn('Search API failed, falling back to client search.', error);
+    setStatus(statusId, 'Search API failed; using local search.', 'error');
+    const clientRows = selectedCases().filter((item) => {
+      const haystack = Object.values(item).join(" ").toLowerCase();
+      return !normalized || haystack.includes(normalized.toLowerCase());
+    });
+    output.innerHTML =
+      clientRows
+        .map(
+          (item) => `
+          <article class="case-card" data-case-id="${item.id}">
             <h3>${item.id} · ${item.offence}</h3>
             <p>${item.summary}</p>
             <div class="case-meta">
               <span>${item.district}</span><span>${item.suspect}</span><span>${item.vehicle}</span><span>${item.risk} risk</span>
             </div>
           </article>`
-      )
-      .join("") || `<article class="case-card"><h3>No matches</h3><p>Try a case ID, phone number, vehicle registration, suspect, or offence.</p></article>`;
+        )
+        .join("") || `<article class="case-card"><h3>No matches</h3><p>Try a case ID, phone number, vehicle registration, suspect, or offence.</p></article>`;
+  }
 }
 
-function extractFir() {
+async function showCaseDetail(caseId) {
+  const detailNode = document.getElementById('detail-content');
+  if (!detailNode) return;
+
+  detailNode.innerHTML = '<p class="muted">Loading case detail...</p>';
+
+  try {
+    const response = await fetch(`/api/cases/${encodeURIComponent(caseId)}`);
+    if (!response.ok) throw new Error(`Case API returned ${response.status}`);
+    const item = await response.json();
+    detailNode.innerHTML = `
+      <div class="detail-content">
+        <div class="detail-row"><strong>Case ID</strong><span>${item.id}</span></div>
+        <div class="detail-row"><strong>Offence</strong><span>${item.offence}</span></div>
+        <div class="detail-row"><strong>District</strong><span>${item.district}</span></div>
+        <div class="detail-row"><strong>Suspect</strong><span>${item.suspect}</span></div>
+        <div class="detail-row"><strong>Vehicle</strong><span>${item.vehicle}</span></div>
+        <div class="detail-row"><strong>Phone</strong><span>${item.phone}</span></div>
+        <div class="detail-row"><strong>Risk</strong><span>${item.risk}</span></div>
+        <div class="detail-row"><strong>Status</strong><span>${item.status || 'Open'}</span></div>
+        <div class="detail-row">
+          <strong>Update status</strong>
+          <div class="status-update-row">
+            <select id="detail-status">
+              <option value="Open" ${item.status === 'Open' ? 'selected' : ''}>Open</option>
+              <option value="In progress" ${item.status === 'In progress' ? 'selected' : ''}>In progress</option>
+              <option value="Closed" ${item.status === 'Closed' ? 'selected' : ''}>Closed</option>
+            </select>
+            <button id="update-status-button" class="primary-action" type="button">Save</button>
+          </div>
+          <span id="detail-status-line" class="status-line"></span>
+        </div>
+        <div class="detail-row"><strong>Summary</strong><span>${item.summary}</span></div>
+      </div>`;
+
+    const updateButton = detailNode.querySelector('#update-status-button');
+    if (updateButton) {
+      updateButton.addEventListener('click', () => {
+        const newStatus = detailNode.querySelector('#detail-status').value;
+        updateCaseStatus(item.id, newStatus);
+      });
+    }
+  } catch (error) {
+    console.warn('Case detail fetch failed.', error);
+    detailNode.innerHTML = '<p class="muted">Unable to load case detail.</p>';
+  }
+}
+
+async function updateCaseStatus(caseId, status) {
+  const detailStatus = document.getElementById('detail-status-line');
+  if (detailStatus) {
+    detailStatus.textContent = 'Saving status...';
+    detailStatus.classList.remove('error');
+  }
+
+  try {
+    const response = await fetch(`/api/cases/${encodeURIComponent(caseId)}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      throw new Error(errorBody.error || `Request failed with ${response.status}`);
+    }
+
+    const item = await response.json();
+    if (detailStatus) {
+      detailStatus.textContent = 'Status updated.';
+    }
+    showCaseDetail(item.id);
+    renderSearch(document.getElementById('case-search').value);
+  } catch (error) {
+    console.warn('Status update failed.', error);
+    if (detailStatus) {
+      detailStatus.textContent = 'Unable to update status.';
+      detailStatus.classList.add('error');
+    }
+  }
+}
+
+async function extractFir() {
   const text = document.getElementById("fir-input").value;
-  const vehicles = text.match(/[A-Z]{2}-\d{2}-[A-Z]{1,2}-\d{4}/g) || [];
-  const phones = text.match(/\b[6-9]\d{9}\b/g) || [];
-  const dates = text.match(/\b\d{1,2}\s+[A-Z][a-z]+\s+\d{4}\b/g) || [];
-  const names = text.match(/\b[A-Z][a-z]+\s+[A-Z]\b/g) || [];
-  const riskTags = [
-    text.toLowerCase().includes("duplicate key") ? "Duplicate-key vehicle theft" : null,
-    text.toLowerCase().includes("transit") ? "Transit hub cluster" : null,
-    text.toLowerCase().includes("similar") ? "Repeat pattern indicated" : null,
-  ].filter(Boolean);
+  const summaryNode = document.getElementById("fir-summary");
+  const statusId = "fir-status";
+  const button = document.getElementById("summarize-fir");
 
-  const cards = [
-    ["Summary", text.split(".").slice(0, 2).join(".") + "."],
-    ["People", names.length ? [...new Set(names)].join(", ") : "No named people detected"],
-    ["Vehicles", vehicles.length ? vehicles.join(", ") : "No vehicle registration detected"],
-    ["Phones", phones.length ? phones.join(", ") : "No phone numbers detected"],
-    ["Timeline", dates.length ? dates.join(", ") : "No explicit date detected"],
-    ["Risk Tags", riskTags.length ? riskTags.join(", ") : "Routine triage"],
-  ];
+  if (button) {
+    button.disabled = true;
+    button.classList.add('loading');
+  }
 
-  document.getElementById("fir-summary").innerHTML = cards
-    .map((item) => `<article class="summary-card"><strong>${item[0]}</strong><p>${item[1]}</p></article>`)
-    .join("");
+  setStatus(statusId, "Analyzing FIR...", "loading");
+
+  try {
+    const response = await fetch('/api/fir/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      throw new Error(errorBody.error || `FIR API returned ${response.status}`);
+    }
+
+    const data = await response.json();
+    const cards = [
+      ['Summary', data.summary],
+      ['People', data.people],
+      ['Vehicles', data.vehicles],
+      ['Phones', data.phones],
+      ['Timeline', data.dates],
+      ['Risk Tags', data.riskTags],
+    ];
+
+    summaryNode.innerHTML = cards
+      .map((item) => `<article class="summary-card"><strong>${item[0]}</strong><p>${item[1]}</p></article>`)
+      .join('');
+
+    setStatus(statusId, 'FIR analysis complete.', '');
+  } catch (error) {
+    console.warn('FIR analyze API failed, using client fallback.', error);
+    setStatus(statusId, 'FIR API failed; using local fallback.', 'error');
+
+    const vehicles = text.match(/[A-Z]{2}-\d{2}-[A-Z]{1,2}-\d{4}/g) || [];
+    const phones = text.match(/\b[6-9]\d{9}\b/g) || [];
+    const dates = text.match(/\b\d{1,2}\s+[A-Z][a-z]+\s+\d{4}\b/g) || [];
+    const names = text.match(/\b[A-Z][a-z]+\s+[A-Z]\b/g) || [];
+    const riskTags = [
+      text.toLowerCase().includes('duplicate key') ? 'Duplicate-key vehicle theft' : null,
+      text.toLowerCase().includes('transit') ? 'Transit hub cluster' : null,
+      text.toLowerCase().includes('similar') ? 'Repeat pattern indicated' : null,
+    ].filter(Boolean);
+
+    const cards = [
+      ['Summary', text.split('.').slice(0, 2).join('.') + '.'],
+      ['People', names.length ? [...new Set(names)].join(', ') : 'No named people detected'],
+      ['Vehicles', vehicles.length ? vehicles.join(', ') : 'No vehicle registration detected'],
+      ['Phones', phones.length ? phones.join(', ') : 'No phone numbers detected'],
+      ['Timeline', dates.length ? dates.join(', ') : 'No explicit date detected'],
+      ['Risk Tags', riskTags.length ? riskTags.join(', ') : 'Routine triage'],
+    ];
+
+    summaryNode.innerHTML = cards
+      .map((item) => `<article class="summary-card"><strong>${item[0]}</strong><p>${item[1]}</p></article>`)
+      .join('');
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.classList.remove('loading');
+    }
+  }
 }
 
 function answerQuestion(question) {
@@ -422,6 +633,14 @@ function bindEvents() {
   });
 
   document.getElementById("case-search").addEventListener("input", (event) => renderSearch(event.target.value));
+  document.getElementById("status-filter").addEventListener("change", () => renderSearch(document.getElementById("case-search").value));
+  document.getElementById("risk-filter").addEventListener("change", () => renderSearch(document.getElementById("case-search").value));
+  document.getElementById("case-results").addEventListener("click", (event) => {
+    const card = event.target.closest('.case-card');
+    if (!card) return;
+    const caseId = card.dataset.caseId;
+    if (caseId) showCaseDetail(caseId);
+  });
   document.getElementById("summarize-fir").addEventListener("click", extractFir);
   document.getElementById("simulate-alert").addEventListener("click", () => {
     const alertList = document.getElementById("alerts");
@@ -441,7 +660,9 @@ function bindEvents() {
   window.addEventListener("resize", drawTrendChart);
 }
 
-function init() {
+async function init() {
+  await loadData();
+
   const filter = document.getElementById("district-filter");
   districts.forEach((district) => {
     const option = document.createElement("option");

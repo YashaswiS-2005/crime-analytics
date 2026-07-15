@@ -1,0 +1,12 @@
+{
+  "name": "crime-analytics",
+  "version": "1.0.0",
+  "description": "Crime analytics prototype with frontend and backend API.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
