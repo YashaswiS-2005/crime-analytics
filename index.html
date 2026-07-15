@@ -22,15 +22,20 @@
           <button class="nav-item" data-view="network" title="Network">Network</button>
           <button class="nav-item" data-view="search" title="Search">Search</button>
           <button class="nav-item" data-view="fir" title="FIR Analytics">FIR Analytics</button>
+          <button class="nav-item" data-view="fir-form" title="New Case">+ New Case</button>
           <button class="nav-item" data-view="assistant" title="AI Assistant">AI Assistant</button>
+          <button class="nav-item" data-view="roadmap" title="Future Roadmap">🗺️ Roadmap</button>
         </nav>
         <div class="status-panel">
           <span class="status-dot"></span>
           <div>
             <strong>Live monitoring</strong>
-            <span>4 active alerts</span>
+            <span id="active-alerts-count">4 active alerts</span>
           </div>
         </div>
+        <button id="toggle-realtime" class="secondary-action" style="margin-top: auto; width: 100%;">
+          📡 Real-time: ON
+        </button>
       </aside>
 
       <main class="workspace">
@@ -46,9 +51,15 @@
                 <option value="All">All districts</option>
               </select>
             </label>
+            <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
+            <button id="export-csv" class="secondary-action" type="button" title="Export to CSV">Export CSV</button>
+            <button id="export-pdf" class="secondary-action" type="button" title="Export to PDF">Export PDF</button>
             <button id="simulate-alert" class="primary-action" type="button">Run Alert Scan</button>
           </div>
         </header>
+
+        <!-- Notifications Center -->
+        <div id="notifications-center" class="notifications-center"></div>
 
         <section class="view active" id="overview">
           <section class="panel hero-banner">
@@ -73,16 +84,19 @@
                 </div>
                 <span class="risk-pill high">Predictive</span>
               </div>
-              <canvas id="trend-chart" height="280" aria-label="Crime trend chart"></canvas>
+              <div class="chart-container">
+                <canvas id="trend-chart" height="280" aria-label="Crime trend chart"></canvas>
+                <div id="trend-tooltip" class="chart-tooltip"></div>
+              </div>
             </section>
             <section class="panel">
               <div class="panel-header">
                 <div>
-                  <h2>District Comparison</h2>
-                  <p>Case volume by district</p>
+                  <h2>Top Districts by Crime Intensity</h2>
+                  <p>Ranked by risk score and case volume</p>
                 </div>
               </div>
-              <div id="district-bars" class="bar-list"></div>
+              <div id="top-districts-ranking" class="ranking-list"></div>
             </section>
             <section class="panel">
               <div class="panel-header">
@@ -116,6 +130,20 @@
                 <span class="risk-pill high">GIS Prototype</span>
               </div>
               <div id="map" class="map-surface" aria-label="Karnataka hotspot map"></div>
+              <div class="hotspot-legend">
+                <div class="legend-item">
+                  <span class="legend-dot high"></span>
+                  <span>High Risk (80-100)</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-dot medium"></span>
+                  <span>Medium Risk (50-79)</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-dot low"></span>
+                  <span>Low Risk (0-49)</span>
+                </div>
+              </div>
             </section>
             <section class="panel">
               <div class="panel-header">
@@ -162,6 +190,27 @@
             </div>
             <div class="filter-row">
               <input id="case-search" class="search-input" type="search" placeholder="Try CASE-1047, KA-05-MX-2219, 98450, burglary..." />
+              <label class="select-wrap">
+                <span>Date Range</span>
+                <select id="date-range-filter">
+                  <option value="">All dates</option>
+                  <option value="7">Last 7 days</option>
+                  <option value="30">Last 30 days</option>
+                  <option value="90">Last 90 days</option>
+                </select>
+              </label>
+              <label class="select-wrap">
+                <span>Offence</span>
+                <select id="offence-filter">
+                  <option value="">All offences</option>
+                  <option value="Vehicle theft">Vehicle theft</option>
+                  <option value="Chain snatching">Chain snatching</option>
+                  <option value="Cyber fraud">Cyber fraud</option>
+                  <option value="Burglary">Burglary</option>
+                  <option value="Robbery">Robbery</option>
+                  <option value="Narcotics">Narcotics</option>
+                </select>
+              </label>
               <label class="select-wrap">
                 <span>Status</span>
                 <select id="status-filter">
@@ -215,8 +264,21 @@
               </button>
               <div id="fir-status" class="status-line" aria-live="polite"></div>
               <div id="fir-summary" class="summary-output"></div>
+              <div id="fir-recommendations" class="recommendations-section"></div>
             </section>
           </div>
+        </section>
+
+        <section class="view" id="fir-form">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>Create or Update FIR Record</h2>
+                <p>Add new case or update existing FIR details</p>
+              </div>
+            </div>
+            <div id="fir-form-container" class="fir-form-container"></div>
+          </section>
         </section>
 
         <section class="view" id="assistant">
@@ -244,6 +306,18 @@
               <div id="timeline" class="timeline"></div>
             </section>
           </div>
+        </section>
+
+        <section class="view" id="roadmap">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>Future Direction & Roadmap</h2>
+                <p>Roadmap to transform into a practical investigation dashboard</p>
+              </div>
+            </div>
+            <div id="roadmap-content" class="roadmap-content"></div>
+          </section>
         </section>
       </main>
     </div>
