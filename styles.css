@@ -284,6 +284,9 @@ select {
   place-items: center;
 }
 
+.csv-import { cursor: pointer; display: inline-flex; align-items: center; }
+.csv-import input { display: none; }
+
 .theme-toggle:hover {
   background: var(--surface-2);
 }
@@ -804,7 +807,10 @@ canvas {
 /* Chart Tooltips */
 .chart-container {
   position: relative;
+  overflow-x: auto;
 }
+
+#trend-chart { min-width: 720px; }
 
 .chart-tooltip {
   position: absolute;

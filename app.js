@@ -139,6 +139,7 @@ const titles = {
   hotspots: "Hotspot Detection",
   network: "Criminal Network Analysis",
   search: "Search Portal",
+  import: "Import Dataset",
   fir: "FIR Analytics",
   "fir-form": "Create or Update FIR",
   assistant: "AI Assistant",
@@ -158,6 +159,113 @@ function selectedCases() {
 function selectedHotspots() {
   if (state.district === "All") return hotspots;
   return hotspots.filter((item) => item.district === state.district);
+}
+
+function csvRows(text) {
+  const rows = [];
+  let row = [], field = "", quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === '"') {
+      if (quoted && text[index + 1] === '"') { field += '"'; index += 1; } else quoted = !quoted;
+    } else if (char === ',' && !quoted) { row.push(field.trim()); field = ""; }
+    else if ((char === '\n' || char === '\r') && !quoted) {
+      if (char === '\r' && text[index + 1] === '\n') index += 1;
+      row.push(field.trim()); if (row.some(Boolean)) rows.push(row); row = []; field = "";
+    } else field += char;
+  }
+  row.push(field.trim()); if (row.some(Boolean)) rows.push(row);
+  return rows;
+}
+
+function normaliseHeader(value) { return String(value).toLowerCase().replace(/[^a-z0-9]/g, ""); }
+
+function importCsv(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    const rows = csvRows(String(reader.result));
+    if (rows.length < 2) return showNotification("The CSV has no data rows.", "warning");
+    const headers = rows.shift().map(normaliseHeader);
+    const field = (record, ...names) => names.map((name) => record[headers.indexOf(name)]).find(Boolean) || "";
+    const records = rows.slice(0, 10000).map((row, index) => {
+      const record = row.map((value) => value.trim());
+      const district = field(record, "districtname", "district") || "Unknown district";
+      const offence = field(record, "crimegroupname", "crimeheadname", "offence") || "Unspecified offence";
+      const year = field(record, "firyear", "year");
+      const status = field(record, "firstage", "firstage") || "Open";
+      return { id: field(record, "kgid", "crimeno", "firno") || `FIR-${index + 1}`, district, offence, suspect: "Not provided", vehicle: "Not provided", phone: "Not provided", risk: "Medium", status: /closed|disposed/i.test(status) ? "Closed" : "Open", summary: `${offence} FIR${year ? ` recorded in ${year}` : ""}.`, year };
+    });
+    cases = records;
+    const grouped = Object.values(records.reduce((all, item) => { (all[item.district] ||= []).push(item); return all; }, {}));
+    districts = grouped.map((items) => ({ name: items[0].district, cases: items.length, solved: Math.round(items.filter((item) => item.status === "Closed").length / items.length * 100), hotspot: Math.min(100, Math.round(35 + items.length / Math.max(...grouped.map((group) => group.length)) * 65)), growth: 0 }));
+    hotspots = districts.map((item, index) => ({ district: item.name, x: `${20 + (index * 29) % 65}%`, y: `${22 + (index * 17) % 58}%`, risk: item.hotspot >= 80 ? "high" : item.hotspot >= 50 ? "medium" : "low", score: item.hotspot }));
+    trends = Object.values(records.reduce((all, item) => { const key = item.year || "Unknown"; all[key] = (all[key] || 0) + 1; return all; }, {}));
+    alerts = [`Loaded ${records.length.toLocaleString("en-IN")} FIR records from ${file.name}${rows.length > records.length ? "; first 10,000 rows shown" : ""}.`];
+    state.district = "All";
+    const filter = document.getElementById("district-filter"); filter.innerHTML = '<option value="All">All districts</option>';
+    districts.forEach((item) => filter.add(new Option(item.name, item.name)));
+    renderAll();
+    showNotification(`CSV loaded: ${records.length.toLocaleString("en-IN")} FIR records.`, "success");
+  };
+  reader.readAsText(file);
+}
+
+function renderAll() {
+  renderKpis(); drawTrendChart(); renderTopDistricts(); renderSignals(); renderMap(); renderPredictions(); renderNetwork(); renderSimilarCases(); renderSearch(document.getElementById("case-search")?.value || "");
+}
+
+function renderMonitor(data) {
+  const summary = document.getElementById('monitor-summary'); const priority = document.getElementById('priority-queue'); const feed = document.getElementById('incident-feed'); const state = document.getElementById('monitor-state');
+  if (!summary || !priority || !feed) return;
+  const { totals, quality } = data;
+  summary.innerHTML = [['Open cases', totals.open], ['High risk', totals.highRisk], ['Missing coordinates', quality.missingCoordinates], ['Unassigned cases', quality.missingOfficer]].map(([label, value]) => `<article class="monitor-metric"><strong>${value}</strong><span>${label}</span></article>`).join('');
+  priority.innerHTML = data.priority.map((item) => `<article class="signal priority-${item.risk.toLowerCase()}"><h3>${item.id} <span>${item.priority}/100</span></h3><p>${item.offence} · ${item.district} · ${item.status}</p></article>`).join('') || '<p class="muted">No cases in the priority queue.</p>';
+  feed.innerHTML = data.recent.map((item) => `<article class="signal"><h3>${item.id}</h3><p>${item.offence} reported in ${item.district}${item.date ? ` · ${item.date}` : ''}</p></article>`).join('') || '<p class="muted">No case intake recorded.</p>';
+  if (state) { state.textContent = `Live · ${new Date(data.updatedAt).toLocaleTimeString()}`; state.className = 'risk-pill low'; }
+}
+
+async function refreshMonitor() {
+  const response = await fetch('/api/monitor');
+  if (!response.ok) throw new Error('Monitor refresh failed.');
+  renderMonitor(await response.json());
+}
+
+let pendingImportFile = null;
+function uploadDataset(endpoint, file) {
+  const form = new FormData(); form.append('dataset', file);
+  return fetch(endpoint, { method: 'POST', body: form }).then(async (response) => { const body = await response.json(); if (!response.ok) throw new Error(body.error || 'Dataset request failed.'); return body; });
+}
+
+function renderImportPreview(data) {
+  const output = document.getElementById('import-preview');
+  if (!output) return;
+  output.innerHTML = (data.preview || []).map((item) => `<article class="case-card"><h3>${item.id} · ${item.offence}</h3><p>${item.district}${item.policeStation ? ` · ${item.policeStation}` : ''}</p><div class="case-meta"><span>${item.risk} risk</span><span>${item.status}</span></div></article>`).join('') || '<p class="muted">No valid preview rows.</p>';
+}
+
+function bindDatasetImport() {
+  const form = document.getElementById('dataset-import-form');
+  if (!form) return;
+  const fileInput = document.getElementById('dataset-file'); const status = document.getElementById('import-status'); const confirm = document.getElementById('confirm-import');
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault(); const file = fileInput.files[0]; if (!file) return;
+    pendingImportFile = null; confirm.disabled = true; setStatus('import-status', 'Validating CSV and preparing preview…', 'loading');
+    try {
+      const preview = await uploadDataset('/api/import/preview', file);
+      renderImportPreview(preview);
+      if (preview.missing.length) throw new Error(`Missing required columns: ${preview.missing.join(', ')}.`);
+      pendingImportFile = file; confirm.disabled = false;
+      setStatus('import-status', `${preview.totalRows.toLocaleString()} rows found. ${preview.invalidPreviewRows} invalid row(s) in preview. Review the sample, then import.`, '');
+    } catch (error) { setStatus('import-status', error.message, 'error'); }
+  });
+  confirm.addEventListener('click', async () => {
+    if (!pendingImportFile) return; confirm.disabled = true; setStatus('import-status', 'Importing dataset…', 'loading');
+    try {
+      const result = await uploadDataset('/api/import', pendingImportFile);
+      await loadData(); renderAll();
+      setStatus('import-status', `Imported ${result.imported.toLocaleString()} records; ${result.duplicates} duplicates skipped; ${result.rejected.length} invalid rows rejected. Stored in ${result.database}.`, '');
+      showNotification(`Dataset import complete: ${result.imported.toLocaleString()} records.`, 'success');
+    } catch (error) { setStatus('import-status', error.message, 'error'); } finally { pendingImportFile = null; confirm.disabled = true; }
+  });
 }
 
 function renderKpis() {
@@ -192,7 +300,8 @@ function drawTrendChart() {
   ctx.clearRect(0, 0, width, height);
 
   const padding = 34;
-  const values = [...trends, 452, 474];
+  // Descriptive chart only: do not invent a forecast without a trained model.
+  const values = trends.length ? trends : [0];
   const min = Math.min(...values) - 35;
   const max = Math.max(...values) + 35;
   const stepX = (width - padding * 2) / (values.length - 1);
@@ -221,26 +330,16 @@ function drawTrendChart() {
   ctx.lineWidth = 3;
   ctx.stroke();
 
-  ctx.beginPath();
-  ctx.moveTo(points[trends.length - 1].x, points[trends.length - 1].y);
-  points.slice(trends.length).forEach((point) => ctx.lineTo(point.x, point.y));
-  ctx.strokeStyle = "#d95d39";
-  ctx.setLineDash([7, 6]);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
   points.forEach((point, index) => {
     ctx.beginPath();
-    ctx.arc(point.x, point.y, index >= trends.length ? 5 : 4, 0, Math.PI * 2);
-    ctx.fillStyle = index >= trends.length ? "#d95d39" : "#0f8b8d";
+    ctx.arc(point.x, point.y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = "#0f8b8d";
     ctx.fill();
   });
 
   ctx.fillStyle = "#647485";
   ctx.font = "12px Segoe UI, Arial";
   ctx.fillText("Actual", padding, 18);
-  ctx.fillStyle = "#d95d39";
-  ctx.fillText("Forecast", width - 100, 18);
   
   // Add chart tooltip interaction
   canvas.addEventListener("mousemove", (event) => {
@@ -274,9 +373,12 @@ function drawTrendChart() {
 }
 
 function renderDistrictBars() {
+  // The legacy bar container is not present in the current dashboard.
+  const container = document.getElementById("district-bars");
+  if (!container) return;
   const rows = selectedDistricts();
   const max = Math.max(...rows.map((item) => item.cases), 1);
-  document.getElementById("district-bars").innerHTML = rows
+  container.innerHTML = rows
     .map(
       (item) => `
         <div class="bar-row">
@@ -346,8 +448,8 @@ function renderPredictions() {
       (item) => `
         <article class="case-card">
           <h3>${item.district}</h3>
-          <p>${item.score}% hotspot probability. Recommended: deploy patrol visibility and verify repeat-offender movement.</p>
-          <div class="case-meta"><span>${item.risk.toUpperCase()}</span><span>Forecast window: 30 days</span></div>
+          <p>Rule-based hotspot score: ${item.score}/100. Recommended: deploy patrol visibility and verify repeat-offender movement.</p>
+          <div class="case-meta"><span>${item.risk.toUpperCase()}</span><span>Based on loaded FIR volume</span></div>
         </article>`
     )
     .join("");
@@ -438,6 +540,7 @@ function exportToCSV() {
   }
 
   const headers = ["Case ID", "District", "Offence", "Suspect", "Vehicle", "Phone", "Risk", "Status", "Summary"];
+  const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
   const csvContent = [
     headers.join(","),
     ...rows.map(item => [
@@ -449,8 +552,8 @@ function exportToCSV() {
       item.phone,
       item.risk,
       item.status || "Open",
-      `"${item.summary}"`
-    ].join(","))
+      item.summary
+    ].map(escapeCsv).join(","))
   ].join("\n");
 
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -466,34 +569,25 @@ function exportToPDF() {
     showNotification("No cases to export.", "warning");
     return;
   }
+  const report = window.open("", "_blank", "width=900,height=700");
+  if (!report) return showNotification("Allow pop-ups to export a PDF.", "warning");
+  const escapeHtml = (value) => String(value ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const headers = ["Case ID", "District", "Offence", "Suspect", "Vehicle", "Phone", "Risk", "Status", "Summary"];
+  const body = rows.map((item) => [item.id, item.district, item.offence, item.suspect, item.vehicle, item.phone, item.risk, item.status || "Open", item.summary]
+    .map((value) => `<td>${escapeHtml(value)}</td>`).join("")).map((cells) => `<tr>${cells}</tr>`).join("");
+  report.document.write(`<!doctype html><title>Crime Analytics Report</title><style>body{font:13px Arial;padding:28px;color:#17212b}table{border-collapse:collapse;width:100%}th,td{border:1px solid #b8c2cc;padding:7px;text-align:left;vertical-align:top}th{background:#eef2f5}@media print{body{padding:0}}</style><h1>Crime Analytics Report</h1><p>Generated: ${escapeHtml(new Date().toLocaleString())}<br>District: ${escapeHtml(state.district)} · Cases: ${rows.length}</p><table><thead><tr>${headers.map((header) => `<th>${header}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table>`);
+  report.document.close();
+  report.focus();
+  report.print();
+  showNotification("Print dialog opened — choose Save as PDF.", "success");
+}
 
-  let pdfContent = "CRIME ANALYTICS REPORT\n";
-  pdfContent += "=" .repeat(60) + "\n\n";
-  pdfContent += `Generated: ${new Date().toLocaleString()}\n`;
-  pdfContent += `District: ${state.district}\n`;
-  pdfContent += `Total Cases: ${rows.length}\n\n`;
-  
-  pdfContent += "CASE DETAILS\n";
-  pdfContent += "-".repeat(60) + "\n";
-  
-  rows.forEach((item, idx) => {
-    pdfContent += `\n${idx + 1}. CASE ID: ${item.id}\n`;
-    pdfContent += `   District: ${item.district}\n`;
-    pdfContent += `   Offence: ${item.offence}\n`;
-    pdfContent += `   Suspect: ${item.suspect}\n`;
-    pdfContent += `   Vehicle: ${item.vehicle}\n`;
-    pdfContent += `   Phone: ${item.phone}\n`;
-    pdfContent += `   Risk Level: ${item.risk}\n`;
-    pdfContent += `   Status: ${item.status || 'Open'}\n`;
-    pdfContent += `   Summary: ${item.summary}\n`;
-  });
-
-  const blob = new Blob([pdfContent], { type: "text/plain;charset=utf-8;" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `crime-analytics-report-${new Date().toISOString().split('T')[0]}.txt`;
-  link.click();
-  showNotification(`PDF report generated with ${rows.length} cases.`, "success");
+function exportToExcel() {
+  if (!window.XLSX) return showNotification('Excel export library is unavailable.', 'warning');
+  const rows = selectedCases();
+  const sheetRows = rows.map((item) => ({ 'Case ID': item.id, District: item.district, Offence: item.offence, Suspect: item.suspect, Vehicle: item.vehicle, Phone: item.phone, Risk: item.risk, Status: item.status, Date: item.date || '', Officer: item.officer || '', Severity: item.severity || '', 'Evidence Count': item.evidenceCount || 0, 'Witness Count': item.witnessCount || 0 }));
+  const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(sheetRows), 'Cases');
+  XLSX.writeFile(workbook, `crime-analytics-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
 function showNotification(message, type = "info") {
@@ -854,6 +948,12 @@ function answerQuestion(question) {
   return "I found relevant indicators across cases, hotspots, and alerts. Ask about vehicle theft, cyber fraud, district risk, patrol recommendations, trends, solved rates, or a case ID for a sharper answer.";
 }
 
+async function queryAssistant(question) {
+  const response = await fetch('/api/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question }) });
+  if (!response.ok) throw new Error('Assistant service is unavailable.');
+  return (await response.json()).reply;
+}
+
 function renderFirForm() {
   const container = document.getElementById("fir-form-container");
   if (!container) return;
@@ -970,14 +1070,12 @@ function validateFirForm() {
   return Object.keys(errors).length === 0;
 }
 
-function submitFirForm(event) {
+async function submitFirForm(event) {
   event.preventDefault();
   
   if (!validateFirForm()) return;
   
-  const caseId = document.getElementById("form-case-id").value;
   const newCase = {
-    id: caseId,
     district: document.getElementById("form-district").value,
     offence: document.getElementById("form-offence").value,
     suspect: document.getElementById("form-suspect").value,
@@ -988,21 +1086,21 @@ function submitFirForm(event) {
     summary: document.getElementById("form-summary").value,
   };
   
-  cases.push(newCase);
-  
   const statusMsg = document.getElementById("form-status-message");
-  if (statusMsg) {
-    statusMsg.textContent = `✓ Case ${caseId} created successfully!`;
-    statusMsg.classList.remove("error");
-    statusMsg.classList.add("form-success");
-  }
-  
-  showNotification(`Case ${caseId} created successfully!`, "success");
-  
-  setTimeout(() => {
+  try {
+    const response = await fetch('/api/cases', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newCase) });
+    const created = await response.json();
+    if (!response.ok) throw new Error(created.error || 'Unable to create case.');
+    cases.push(created);
+    if (statusMsg) { statusMsg.textContent = `Case ${created.id} created successfully.`; statusMsg.classList.remove("error"); statusMsg.classList.add("form-success"); }
+    showNotification(`Case ${created.id} created successfully.`, "success");
     document.getElementById("fir-create-form").reset();
-    if (statusMsg) statusMsg.textContent = "";
-  }, 2000);
+    document.getElementById("form-case-id").value = created.id;
+    renderAll();
+  } catch (error) {
+    if (statusMsg) { statusMsg.textContent = error.message; statusMsg.classList.add("error"); }
+    showNotification(error.message, "warning");
+  }
 }
 
 function appendMessage(text, type = "bot") {
@@ -1194,11 +1292,13 @@ function renderTimeline() {
 }
 
 function bindEvents() {
+  bindDatasetImport();
   // Real-time toggle
   const realtimeToggle = document.getElementById("toggle-realtime");
   if (realtimeToggle) {
     realtimeToggle.addEventListener("click", toggleRealtime);
   }
+  const themeToggle = document.getElementById("theme-toggle");
   if (themeToggle) {
     themeToggle.textContent = state.theme === "dark" ? "☀️" : "🌙";
     themeToggle.addEventListener("click", toggleTheme);
@@ -1209,6 +1309,12 @@ function bindEvents() {
   if (exportPdfButton) {
     exportPdfButton.addEventListener("click", exportToPDF);
   }
+  const exportCsvButton = document.getElementById("export-csv");
+  if (exportCsvButton) exportCsvButton.addEventListener("click", exportToCSV);
+  const exportXlsxButton = document.getElementById("export-xlsx");
+  if (exportXlsxButton) exportXlsxButton.addEventListener("click", exportToExcel);
+  const csvInput = document.getElementById("csv-file-input");
+  if (csvInput) csvInput.addEventListener("change", (event) => { if (event.target.files[0]) importCsv(event.target.files[0]); });
 
   document.querySelectorAll(".nav-item").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1254,8 +1360,15 @@ function bindEvents() {
   });
   document.getElementById("summarize-fir").addEventListener("click", extractFir);
   document.getElementById("simulate-alert").addEventListener("click", () => {
-    const alertList = document.getElementById("alerts");
-    alertList.insertAdjacentHTML("afterbegin", `<article class="alert"><p>New scan: Bengaluru Urban crossed the 90-point hotspot threshold for transit theft.</p></article>`);
+    const button = document.getElementById("simulate-alert");
+    button.disabled = true; button.textContent = "Scanning…";
+    fetch('/api/alerts/scan').then((response) => response.json()).then((data) => {
+      if (data.error) throw new Error(data.error);
+      alerts = data.findings.map((finding) => finding.message);
+      renderSignals();
+      showNotification(`Scan complete: ${data.findings.length} finding${data.findings.length === 1 ? "" : "s"} across ${data.scanned} cases.`, "success");
+    }).catch((error) => showNotification(error.message || "Alert scan failed.", "warning"))
+      .finally(() => { button.disabled = false; button.textContent = "Run Alert Scan"; });
   });
 
   document.getElementById("chat-form").addEventListener("submit", (event) => {
@@ -1264,7 +1377,12 @@ function bindEvents() {
     const question = input.value.trim();
     if (!question) return;
     appendMessage(question, "user");
-    appendMessage(answerQuestion(question));
+    appendMessage("Checking the current case data…");
+    queryAssistant(question).then((reply) => {
+      const messages = document.querySelectorAll('#chat-log .message.bot');
+      const pending = messages[messages.length - 1];
+      if (pending) pending.textContent = reply;
+    }).catch((error) => appendMessage(error.message));
     input.value = "";
   });
 
@@ -1291,7 +1409,6 @@ async function init() {
   document.getElementById("fir-input").value = firSample;
   renderKpis();
   drawTrendChart();
-  renderDistrictBars();
   renderTopDistricts();
   renderSignals();
   renderMap();

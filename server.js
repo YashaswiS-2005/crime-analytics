@@ -1,9 +1,21 @@
 const fs = require('fs');
 const express = require('express');
 const path = require('path');
+const multer = require('multer');
+const csvParser = require('csv-parser');
+const { Readable } = require('stream');
+const { MongoClient } = require('mongodb');
 
 const app = express();
 const port = process.env.PORT || 3000;
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
+let mongoCases;
+
+if (process.env.MONGODB_URI) {
+  MongoClient.connect(process.env.MONGODB_URI)
+    .then((client) => { mongoCases = client.db(process.env.MONGODB_DB || 'crime_analytics').collection('cases'); console.log('MongoDB connected'); })
+    .catch((error) => console.error('MongoDB unavailable; using data.json:', error.message));
+}
 
 const districts = [
   { name: 'Bengaluru Urban', cases: 842, solved: 64, hotspot: 91, growth: 12 },
@@ -107,6 +119,14 @@ const timeline = [
 ];
 
 const dataPath = path.join(__dirname, 'data.json');
+function refreshAnalytics() {
+  const groups = cases.reduce((all, item) => { (all[item.district] ||= []).push(item); return all; }, {});
+  districts.length = 0;
+  const values = Object.entries(groups).map(([name, items]) => ({ name, cases: items.length, solved: Math.round((items.filter((item) => item.status === 'Closed').length / items.length) * 100), hotspot: Math.round((items.filter((item) => item.risk === 'High').length / items.length) * 70 + Math.min(30, items.length)), growth: 0 }));
+  districts.push(...values.sort((a, b) => b.cases - a.cases));
+  hotspots.length = 0;
+  hotspots.push(...districts.map((item, index) => ({ district: item.name, x: `${18 + (index * 23) % 66}%`, y: `${20 + (index * 19) % 62}%`, risk: item.hotspot >= 70 ? 'high' : item.hotspot >= 40 ? 'medium' : 'low', score: item.hotspot })));
+}
 function writeData() {
   try {
     fs.writeFileSync(dataPath, JSON.stringify({ districts, cases, hotspots, alerts, timeline }, null, 2), 'utf8');
@@ -144,6 +164,42 @@ try {
 
 app.use(express.static(path.join(__dirname)));
 app.use(express.json());
+app.use('/vendor/papaparse', express.static(path.join(__dirname, 'node_modules', 'papaparse')));
+
+const canonical = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const aliases = { id: ['firid', 'caseid', 'kgid', 'crimeno'], district: ['district', 'districtname'], offence: ['crimetype', 'crimecategory', 'crimegroupname', 'crimeheadname', 'offence'], status: ['crimestatus', 'investigationstatus', 'status', 'firstage'], risk: ['risklevel', 'risk'], date: ['date', 'firdate', 'year', 'firyear'], policeStation: ['policestation', 'unitname'], latitude: ['latitude', 'lat'], longitude: ['longitude', 'lng', 'long'], officer: ['officerassigned', 'ioname'], severity: ['severity'], evidenceCount: ['evidencecount'], witnessCount: ['witnesscount'] };
+function pick(row, name) { const keys = Object.keys(row); const key = keys.find((item) => aliases[name].includes(canonical(item))); return key ? String(row[key] || '').trim() : ''; }
+function normaliseRecord(row, index) {
+  const id = pick(row, 'id'); const district = pick(row, 'district'); const offence = pick(row, 'offence');
+  if (!id || !district || !offence) return { error: 'FIR/Case ID, District, and Crime Type/Category are required.' };
+  const statusValue = pick(row, 'status'); const severity = pick(row, 'severity');
+  return { record: { id, district, offence, suspect: String(row.Suspect_Name || row.suspect || 'Not provided').trim(), vehicle: String(row.Vehicle_Number || row.vehicle || 'Not provided').trim(), phone: String(row.Phone_Number || row.phone || 'Not provided').trim(), risk: pick(row, 'risk') || (/high|critical/i.test(severity) ? 'High' : 'Medium'), status: /closed|solved|disposed/i.test(statusValue) ? 'Closed' : 'Open', summary: `${offence} reported in ${district}.`, date: pick(row, 'date'), policeStation: pick(row, 'policeStation'), officer: pick(row, 'officer'), severity: severity || 'Unknown', latitude: Number(pick(row, 'latitude')) || null, longitude: Number(pick(row, 'longitude')) || null, evidenceCount: Number(pick(row, 'evidenceCount')) || 0, witnessCount: Number(pick(row, 'witnessCount')) || 0, sourceRow: index + 2 } };
+}
+refreshAnalytics();
+
+function parseCsv(buffer) { return new Promise((resolve, reject) => { const rows = []; Readable.from(buffer).pipe(csvParser()).on('data', (row) => rows.push(row)).on('end', () => resolve(rows)).on('error', reject); }); }
+
+app.post('/api/import/preview', upload.single('dataset'), async (req, res, next) => {
+  try {
+    if (!req.file || !/\.csv$/i.test(req.file.originalname)) return res.status(400).json({ error: 'Upload a CSV file.' });
+    const rows = await parseCsv(req.file.buffer); const headers = rows[0] ? Object.keys(rows[0]) : [];
+    const mapped = headers.map(canonical); const required = ['id', 'district', 'offence'];
+    const missing = required.filter((name) => !aliases[name].some((alias) => mapped.includes(alias)));
+    const normalised = rows.slice(0, 20).map(normaliseRecord); const invalid = normalised.filter((item) => item.error).length;
+    res.json({ fileName: req.file.originalname, totalRows: rows.length, headers, missing, invalidPreviewRows: invalid, preview: normalised.filter((item) => item.record).map((item) => item.record) });
+  } catch (error) { next(error); }
+});
+
+app.post('/api/import', upload.single('dataset'), async (req, res, next) => {
+  try {
+    if (!req.file || !/\.csv$/i.test(req.file.originalname)) return res.status(400).json({ error: 'Upload a CSV file.' });
+    const rows = await parseCsv(req.file.buffer); const seen = new Set(cases.map((item) => item.id)); const valid = []; const rejected = []; let duplicates = 0;
+    rows.forEach((row, index) => { const parsed = normaliseRecord(row, index); if (parsed.error) rejected.push({ row: index + 2, reason: parsed.error }); else if (seen.has(parsed.record.id)) duplicates += 1; else { seen.add(parsed.record.id); valid.push(parsed.record); } });
+    if (mongoCases && valid.length) await mongoCases.bulkWrite(valid.map((document) => ({ updateOne: { filter: { id: document.id }, update: { $set: document }, upsert: true } })));
+    cases.push(...valid); refreshAnalytics(); writeData();
+    res.status(201).json({ imported: valid.length, duplicates, rejected, totalRows: rows.length, database: mongoCases ? 'mongodb' : 'data.json', report: { highRisk: valid.filter((item) => item.risk === 'High').length, solved: valid.filter((item) => item.status === 'Closed').length } });
+  } catch (error) { next(error); }
+});
 
 app.get('/api/data', (req, res) => {
   res.json({ districts, cases, hotspots, alerts, timeline });
@@ -154,6 +210,9 @@ app.get('/api/search', (req, res) => {
   const statusFilter = (req.query.status || '').trim().toLowerCase();
   const riskFilter = (req.query.risk || '').trim().toLowerCase();
   const districtFilter = (req.query.district || '').trim().toLowerCase();
+  const offenceFilter = (req.query.offence || '').trim().toLowerCase();
+  const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 25));
 
   const results = cases.filter((item) => {
     const haystack = Object.values(item).join(' ').toLowerCase();
@@ -161,10 +220,79 @@ app.get('/api/search', (req, res) => {
     const matchesStatus = !statusFilter || item.status?.toLowerCase() === statusFilter;
     const matchesRisk = !riskFilter || item.risk?.toLowerCase() === riskFilter;
     const matchesDistrict = !districtFilter || item.district?.toLowerCase() === districtFilter;
-    return matchesQuery && matchesStatus && matchesRisk && matchesDistrict;
+    const matchesOffence = !offenceFilter || item.offence?.toLowerCase() === offenceFilter;
+    return matchesQuery && matchesStatus && matchesRisk && matchesDistrict && matchesOffence;
   });
 
-  res.json({ query, status: statusFilter, risk: riskFilter, district: districtFilter, results });
+  res.json({ query, status: statusFilter, risk: riskFilter, district: districtFilter, total: results.length, page, limit, results: results.slice((page - 1) * limit, page * limit) });
+});
+
+function makeCaseId() {
+  const latest = cases.reduce((highest, item) => Math.max(highest, Number((item.id || '').match(/(\d+)$/)?.[1]) || 0), 1000);
+  return `CASE-${latest + 1}`;
+}
+
+function scanCases(scope = cases) {
+  const findings = [];
+  const by = (key) => scope.reduce((groups, item) => { const value = String(item[key] || '').trim(); if (value && value !== 'N/A' && value !== 'Not provided') (groups[value] ||= []).push(item); return groups; }, {});
+  for (const [suspect, items] of Object.entries(by('suspect'))) if (items.length > 1) findings.push({ type: 'Repeat offender', severity: 'High', cases: items.map((item) => item.id), message: `${suspect} is linked to ${items.length} cases.` });
+  for (const [phone, items] of Object.entries(by('phone'))) if (items.length > 1) findings.push({ type: 'Shared phone', severity: 'Medium', cases: items.map((item) => item.id), message: `${phone} appears in ${items.length} cases.` });
+  for (const [vehicle, items] of Object.entries(by('vehicle'))) if (items.length > 1) findings.push({ type: 'Shared vehicle', severity: 'Medium', cases: items.map((item) => item.id), message: `${vehicle} appears in ${items.length} cases.` });
+  const districtGroups = by('district');
+  const largest = Object.entries(districtGroups).sort((a, b) => b[1].length - a[1].length)[0];
+  if (largest && largest[1].length >= 2) findings.push({ type: 'High-volume area', severity: 'High', cases: largest[1].map((item) => item.id), message: `${largest[0]} has ${largest[1].length} cases in the current dataset.` });
+  scope.filter((item) => !item.summary || item.summary.length < 10).forEach((item) => findings.push({ type: 'Missing case details', severity: 'Low', cases: [item.id], message: `${item.id} is missing a usable incident summary.` }));
+  return findings;
+}
+
+app.get('/api/alerts/scan', (req, res) => {
+  const findings = scanCases();
+  alerts.length = 0;
+  alerts.push(...findings.map((finding) => finding.message));
+  writeData();
+  res.json({ scanned: cases.length, findings, completedAt: new Date().toISOString() });
+});
+
+app.post('/api/cases', (req, res) => {
+  const body = req.body || {};
+  const required = ['district', 'offence', 'suspect', 'risk', 'summary'];
+  const missing = required.filter((field) => !String(body[field] || '').trim());
+  if (missing.length) return res.status(400).json({ error: `Missing required fields: ${missing.join(', ')}` });
+  const item = { id: makeCaseId(), district: String(body.district).trim(), offence: String(body.offence).trim(), suspect: String(body.suspect).trim(), vehicle: String(body.vehicle || 'N/A').trim(), phone: String(body.phone || 'N/A').trim(), risk: ['Low', 'Medium', 'High'].includes(body.risk) ? body.risk : 'Medium', status: ['Open', 'In progress', 'Closed'].includes(body.status) ? body.status : 'Open', summary: String(body.summary).trim(), createdAt: new Date().toISOString() };
+  cases.push(item);
+  refreshAnalytics();
+  writeData();
+  res.status(201).json(item);
+});
+
+app.get('/api/stats', (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const total = cases.length;
+  const closed = cases.filter((item) => item.status === 'Closed').length;
+  const highRisk = cases.filter((item) => item.risk === 'High').length;
+  res.json({ total, pending: total - closed, solved: closed, solvedRate: total ? Math.round((closed / total) * 100) : 0, highRisk, today: cases.filter((item) => item.createdAt?.slice(0, 10) === today).length });
+});
+
+app.get('/api/monitor', (req, res) => {
+  const ordered = [...cases].sort((a, b) => String(b.createdAt || b.date || '').localeCompare(String(a.createdAt || a.date || '')));
+  const priority = cases.map((item) => ({ ...item, priority: Math.min(100, (item.risk === 'High' ? 60 : item.risk === 'Medium' ? 30 : 10) + (item.status === 'Closed' ? 0 : 25) + (!item.evidenceCount ? 10 : 0) + (!item.officer ? 5 : 0)) })).sort((a, b) => b.priority - a.priority).slice(0, 5);
+  const missingCoordinates = cases.filter((item) => !Number.isFinite(item.latitude) || !Number.isFinite(item.longitude)).length;
+  const missingOfficer = cases.filter((item) => !item.officer || item.officer === 'Not provided').length;
+  const missingEvidence = cases.filter((item) => !item.evidenceCount).length;
+  res.json({ updatedAt: new Date().toISOString(), totals: { cases: cases.length, open: cases.filter((item) => item.status !== 'Closed').length, highRisk: cases.filter((item) => item.risk === 'High').length }, quality: { missingCoordinates, missingOfficer, missingEvidence }, priority, recent: ordered.slice(0, 5) });
+});
+
+app.post('/api/assistant', (req, res) => {
+  const question = String(req.body?.question || '').toLowerCase();
+  const topDistrict = Object.entries(cases.reduce((all, item) => { all[item.district] = (all[item.district] || 0) + 1; return all; }, {})).sort((a, b) => b[1] - a[1])[0];
+  let matching = cases;
+  if (question.includes('theft')) matching = cases.filter((item) => item.offence.toLowerCase().includes('theft'));
+  if (question.includes('pending')) matching = matching.filter((item) => item.status !== 'Closed');
+  if (question.includes('murder')) matching = matching.filter((item) => item.offence.toLowerCase().includes('murder'));
+  const reply = question.includes('highest') || question.includes('area') || question.includes('hotspot')
+    ? `${topDistrict ? `${topDistrict[0]} has the most cases (${topDistrict[1]}) in the loaded data.` : 'No cases are loaded.'}`
+    : `I found ${matching.length} matching case${matching.length === 1 ? '' : 's'}${matching.length ? `: ${matching.slice(0, 5).map((item) => item.id).join(', ')}.` : '.'}`;
+  res.json({ reply, cases: matching.slice(0, 10) });
 });
 
 app.get('/api/cases/:id', (req, res) => {
@@ -219,8 +347,14 @@ app.put('/api/cases/:id/status', (req, res) => {
   }
 
   item.status = status;
+  refreshAnalytics();
   writeData();
   res.json(item);
+});
+
+app.use((error, req, res, next) => {
+  console.error(error);
+  res.status(error.code === 'LIMIT_FILE_SIZE' ? 413 : 500).json({ error: error.code === 'LIMIT_FILE_SIZE' ? 'CSV exceeds the 100 MB limit.' : 'The dataset could not be processed.' });
 });
 
 app.listen(port, () => {

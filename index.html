@@ -21,6 +21,7 @@
           <button class="nav-item" data-view="hotspots" title="Hotspots">Hotspots</button>
           <button class="nav-item" data-view="network" title="Network">Network</button>
           <button class="nav-item" data-view="search" title="Search">Search</button>
+          <button class="nav-item" data-view="import" title="Import Dataset">Import Dataset</button>
           <button class="nav-item" data-view="fir" title="FIR Analytics">FIR Analytics</button>
           <button class="nav-item" data-view="fir-form" title="New Case">+ New Case</button>
           <button class="nav-item" data-view="assistant" title="AI Assistant">AI Assistant</button>
@@ -51,8 +52,13 @@
                 <option value="All">All districts</option>
               </select>
             </label>
+            <label class="secondary-action csv-import" title="Load a Karnataka Police FIR CSV">
+              Load CSV
+              <input id="csv-file-input" type="file" accept=".csv,text/csv" />
+            </label>
             <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
             <button id="export-csv" class="secondary-action" type="button" title="Export to CSV">Export CSV</button>
+            <button id="export-xlsx" class="secondary-action" type="button" title="Export to Excel">Export Excel</button>
             <button id="export-pdf" class="secondary-action" type="button" title="Export to PDF">Export PDF</button>
             <button id="simulate-alert" class="primary-action" type="button">Run Alert Scan</button>
           </div>
@@ -69,20 +75,25 @@
               <p>Unify FIRs, offender links, and geospatial risk signals into one operational command center for Karnataka State Police.</p>
             </div>
             <div class="hero-chips">
-              <span class="hero-chip">Predictive hotspots</span>
+              <span class="hero-chip">Rule-based hotspots</span>
               <span class="hero-chip">Network link analysis</span>
               <span class="hero-chip">AI-assisted triage</span>
             </div>
           </section>
           <div class="kpi-grid" id="kpi-grid"></div>
+          <section class="panel operational-pulse">
+            <div class="panel-header"><div><h2>Operational Pulse</h2><p>Live case priority, data quality, and intake monitoring</p></div><span id="monitor-state" class="risk-pill low">Connecting</span></div>
+            <div id="monitor-summary" class="monitor-summary" aria-live="polite"></div>
+            <div class="monitor-grid"><div><h3>Priority investigation queue</h3><div id="priority-queue" class="signal-list"></div></div><div><h3>Recent intake</h3><div id="incident-feed" class="signal-list"></div></div></div>
+          </section>
           <div class="analytics-grid">
             <section class="panel span-2">
               <div class="panel-header">
                 <div>
-                  <h2>Crime Trend Forecast</h2>
-                  <p>Reported incidents with 30-day projection</p>
+                  <h2>Crime Trend</h2>
+                  <p>Reported incidents over the available data period</p>
                 </div>
-                <span class="risk-pill high">Predictive</span>
+                <span class="risk-pill medium">Data trend</span>
               </div>
               <div class="chart-container">
                 <canvas id="trend-chart" height="280" aria-label="Crime trend chart"></canvas>
@@ -248,6 +259,19 @@
           </section>
         </section>
 
+        <section class="view" id="import">
+          <section class="panel">
+            <div class="panel-header"><div><h2>Import Crime Dataset</h2><p>Preview, validate, and import CSV records. Required: FIR/Case ID, District, and Crime Type or Category.</p></div></div>
+            <form id="dataset-import-form" class="filter-row">
+              <input id="dataset-file" class="search-input" type="file" accept=".csv,text/csv" required />
+              <button class="primary-action" type="submit">Validate &amp; Preview</button>
+              <button id="confirm-import" class="secondary-action" type="button" disabled>Import validated dataset</button>
+            </form>
+            <div id="import-status" class="status-line" aria-live="polite"></div>
+            <div id="import-preview" class="results-grid"></div>
+          </section>
+        </section>
+
         <section class="view" id="fir">
           <div class="split-layout">
             <section class="panel">
@@ -321,6 +345,8 @@
         </section>
       </main>
     </div>
+    <script src="/vendor/papaparse/papaparse.min.js"></script>
+    <script src="/node_modules/xlsx/dist/xlsx.full.min.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
