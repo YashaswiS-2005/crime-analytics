@@ -5,11 +5,16 @@ const multer = require('multer');
 const csvParser = require('csv-parser');
 const { Readable } = require('stream');
 const { MongoClient } = require('mongodb');
+const MLModelTrainer = require('./ml-trainer');
 
 const app = express();
 const port = process.env.PORT || 3000;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 let mongoCases;
+
+// Initialize ML Model Trainer
+const mlTrainer = new MLModelTrainer();
+console.log('[ML] Model trainer initialized');
 
 if (process.env.MONGODB_URI) {
   MongoClient.connect(process.env.MONGODB_URI)
@@ -190,17 +195,6 @@ app.post('/api/import/preview', upload.single('dataset'), async (req, res, next)
   } catch (error) { next(error); }
 });
 
-app.post('/api/import', upload.single('dataset'), async (req, res, next) => {
-  try {
-    if (!req.file || !/\.csv$/i.test(req.file.originalname)) return res.status(400).json({ error: 'Upload a CSV file.' });
-    const rows = await parseCsv(req.file.buffer); const seen = new Set(cases.map((item) => item.id)); const valid = []; const rejected = []; let duplicates = 0;
-    rows.forEach((row, index) => { const parsed = normaliseRecord(row, index); if (parsed.error) rejected.push({ row: index + 2, reason: parsed.error }); else if (seen.has(parsed.record.id)) duplicates += 1; else { seen.add(parsed.record.id); valid.push(parsed.record); } });
-    if (mongoCases && valid.length) await mongoCases.bulkWrite(valid.map((document) => ({ updateOne: { filter: { id: document.id }, update: { $set: document }, upsert: true } })));
-    cases.push(...valid); refreshAnalytics(); writeData();
-    res.status(201).json({ imported: valid.length, duplicates, rejected, totalRows: rows.length, database: mongoCases ? 'mongodb' : 'data.json', report: { highRisk: valid.filter((item) => item.risk === 'High').length, solved: valid.filter((item) => item.status === 'Closed').length } });
-  } catch (error) { next(error); }
-});
-
 app.get('/api/data', (req, res) => {
   res.json({ districts, cases, hotspots, alerts, timeline });
 });
@@ -352,6 +346,128 @@ app.put('/api/cases/:id/status', (req, res) => {
   res.json(item);
 });
 
+// ============ ML MODEL ENDPOINTS ============
+
+// Get model training status and info
+app.get('/api/ml/status', (req, res) => {
+  const modelInfo = mlTrainer.getModelInfo();
+  res.json({
+    ...modelInfo,
+    message: modelInfo.isTrained 
+      ? `Model trained on ${modelInfo.stats.samplesUsed} cases with ${modelInfo.stats.accuracy}% accuracy` 
+      : 'Model not yet trained. Call POST /api/ml/train to train the model.',
+  });
+});
+
+// Train the ML model on case data
+app.post('/api/ml/train', async (req, res) => {
+  const epochs = parseInt(req.body?.epochs || 50, 10);
+  
+  if (cases.length < 2) {
+    return res.status(400).json({ 
+      error: 'Need at least 2 cases to train the model. Import more cases first.' 
+    });
+  }
+
+  console.log(`[API] Training request: ${cases.length} cases, ${epochs} epochs`);
+  
+  try {
+    const result = await mlTrainer.trainModel(cases, epochs);
+    
+    if (result.error) {
+      return res.status(400).json(result);
+    }
+    
+    res.json({
+      success: true,
+      ...result,
+      endpoint: '/api/ml/predict',
+      usageExample: {
+        method: 'POST',
+        url: '/api/ml/predict',
+        body: {
+          district: 'Bengaluru Urban',
+          offence: 'Vehicle theft',
+          suspect: 'Ravi K',
+          vehicle: 'KA-05-MX-2219',
+          status: 'Open',
+        },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Predict risk for a new case using the trained model
+app.post('/api/ml/predict', (req, res) => {
+  const caseData = req.body;
+  
+  if (!caseData || !caseData.district || !caseData.offence) {
+    return res.status(400).json({ 
+      error: 'Case data must include at least: district, offence' 
+    });
+  }
+
+  const modelInfo = mlTrainer.getModelInfo();
+  if (!modelInfo.isTrained) {
+    return res.status(400).json({ 
+      error: 'Model not trained yet. Train the model first with POST /api/ml/train',
+      trainEndpoint: '/api/ml/train',
+    });
+  }
+
+  const prediction = mlTrainer.predictCaseRisk(caseData);
+
+  res.json({
+    caseData: {
+      district: caseData.district,
+      offence: caseData.offence,
+      suspect: caseData.suspect || 'Unknown',
+      status: caseData.status || 'Open',
+    },
+    prediction,
+    modelStats: modelInfo.stats,
+  });
+});
+
+// Auto-train model when importing CSV
+app.post('/api/import', upload.single('dataset'), async (req, res, next) => {
+  try {
+    if (!req.file || !/\.csv$/i.test(req.file.originalname)) return res.status(400).json({ error: 'Upload a CSV file.' });
+    const rows = await parseCsv(req.file.buffer); const seen = new Set(cases.map((item) => item.id)); const valid = []; const rejected = []; let duplicates = 0;
+    rows.forEach((row, index) => { const parsed = normaliseRecord(row, index); if (parsed.error) rejected.push({ row: index + 2, reason: parsed.error }); else if (seen.has(parsed.record.id)) duplicates += 1; else { seen.add(parsed.record.id); valid.push(parsed.record); } });
+    if (mongoCases && valid.length) await mongoCases.bulkWrite(valid.map((document) => ({ updateOne: { filter: { id: document.id }, update: { $set: document }, upsert: true } })));
+    cases.push(...valid); refreshAnalytics(); writeData();
+    
+    // Auto-train model after import if we have enough cases
+    if (cases.length >= 2 && !mlTrainer.getModelInfo().isTrained) {
+      console.log('[API] Auto-training model after CSV import...');
+      const trainResult = await mlTrainer.trainModel(cases, 50);
+      if (trainResult.success) {
+        console.log('[API] Model auto-trained successfully');
+      }
+    }
+    
+    res.status(201).json({ 
+      imported: valid.length, 
+      duplicates, 
+      rejected, 
+      totalRows: rows.length, 
+      database: mongoCases ? 'mongodb' : 'data.json', 
+      report: { 
+        highRisk: valid.filter((item) => item.risk === 'High').length, 
+        solved: valid.filter((item) => item.status === 'Closed').length 
+      },
+      mlModel: {
+        isTrained: mlTrainer.getModelInfo().isTrained,
+        message: 'Model was auto-trained on imported data',
+        endpoint: '/api/ml/predict',
+      },
+    });
+  } catch (error) { next(error); }
+});
+
 app.use((error, req, res, next) => {
   console.error(error);
   res.status(error.code === 'LIMIT_FILE_SIZE' ? 413 : 500).json({ error: error.code === 'LIMIT_FILE_SIZE' ? 'CSV exceeds the 100 MB limit.' : 'The dataset could not be processed.' });
@@ -359,4 +475,5 @@ app.use((error, req, res, next) => {
 
 app.listen(port, () => {
   console.log(`Crime Analytics backend running at http://localhost:${port}`);
+  console.log(`ML Model trainer ready. Call POST /api/ml/train to start training.`);
 });
