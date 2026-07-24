@@ -172,8 +172,12 @@ app.use(express.json());
 app.use('/vendor/papaparse', express.static(path.join(__dirname, 'node_modules', 'papaparse')));
 
 const canonical = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-const aliases = { id: ['firid', 'caseid', 'kgid', 'crimeno'], district: ['district', 'districtname'], offence: ['crimetype', 'crimecategory', 'crimegroupname', 'crimeheadname', 'offence'], status: ['crimestatus', 'investigationstatus', 'status', 'firstage'], risk: ['risklevel', 'risk'], date: ['date', 'firdate', 'year', 'firyear'], policeStation: ['policestation', 'unitname'], latitude: ['latitude', 'lat'], longitude: ['longitude', 'lng', 'long'], officer: ['officerassigned', 'ioname'], severity: ['severity'], evidenceCount: ['evidencecount'], witnessCount: ['witnesscount'] };
-function pick(row, name) { const keys = Object.keys(row); const key = keys.find((item) => aliases[name].includes(canonical(item))); return key ? String(row[key] || '').trim() : ''; }
+const aliases = { id: ['crimeno', 'firid', 'caseid', 'firno', 'kgid'], district: ['district', 'districtname'], offence: ['crimetype', 'crimecategory', 'crimegroupname', 'crimeheadname', 'offence'], status: ['crimestatus', 'investigationstatus', 'status', 'firstage', 'firstage'], risk: ['risklevel', 'risk'], date: ['date', 'firdate', 'year', 'firyear'], policeStation: ['policestation', 'unitname'], latitude: ['latitude', 'lat'], longitude: ['longitude', 'lng', 'long'], officer: ['officerassigned', 'ioname'], severity: ['severity', 'firtype'], evidenceCount: ['evidencecount'], witnessCount: ['witnesscount'] };
+function pick(row, name) {
+  const keysByCanonical = Object.fromEntries(Object.keys(row).map((key) => [canonical(key), key]));
+  const key = aliases[name].map((alias) => keysByCanonical[alias]).find(Boolean);
+  return key ? String(row[key] || '').trim() : '';
+}
 function normaliseRecord(row, index) {
   const id = pick(row, 'id'); const district = pick(row, 'district'); const offence = pick(row, 'offence');
   if (!id || !district || !offence) return { error: 'FIR/Case ID, District, and Crime Type/Category are required.' };

@@ -1,9 +1,0 @@
-
-> crime-analytics@1.0.0 start
-> node server.js
-
-[ML] Model loaded from disk
-[ML] Model trainer initialized
-Loaded backend data from data.json
-Crime Analytics backend running at http://localhost:3000
-ML Model trainer ready. Call POST /api/ml/train to start training.
