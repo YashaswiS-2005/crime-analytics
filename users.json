@@ -1,9 +1,25 @@
 {
   "users": {
     "prathi": {
+      "username": "prathi",
+      "role": "Analyst",
+      "email": "",
       "salt": "4221826678c93ce194b242d476e99baf",
       "hash": "788cae8223026f591d76873bb1af36cd06019ae4f3c8723f6bbb7a7f5172db08",
       "createdAt": "2026-07-24T05:05:25.065Z"
+    },
+    "apeksha": {
+      "username": "apeksha",
+      "role": "Analyst",
+      "email": "",
+      "createdAt": "2026-07-24T10:19:18.987Z",
+      "passwordHash": "$2b$12$kdSyma.Wp1kMQsQP9K8tMON3kWYk/bK/g710aCQU4NvEffu3soVJC",
+      "refreshTokens": [
+        {
+          "tokenHash": "e65c7c433d0c88d0df0133bf5154280d3323b4432df22a144c97b45cc62c35d0",
+          "expiresAt": "2026-07-31T12:21:36.000Z"
+        }
+      ]
     }
   }
 }

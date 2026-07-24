@@ -1,0 +1,17 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+uploads/
+tmp/
+coverage/
+dist/
+build/
+.cache/
+*.local
+.venv/
+venv/
+ENV/
+env/
+.python-version
