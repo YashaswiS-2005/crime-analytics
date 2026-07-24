@@ -488,13 +488,16 @@ function renderSignals() {
 
 function renderMap() {
   const rows = selectedHotspots();
+  const visibleRows = state.district === "All"
+    ? [...rows].sort((a, b) => b.score - a.score).slice(0, 12)
+    : rows;
   document.getElementById("map").innerHTML = `
     <div class="map-outline"></div>
-    ${rows
+    ${visibleRows
       .map(
         (item) => `
           <span class="hotspot ${item.risk}" style="--x:${item.x};--y:${item.y};--size:${46 + item.score / 2}px">${item.score}</span>
-          <span class="map-label" style="--x:${item.x};--y:${item.y}">${item.district}</span>
+          <span class="map-label" style="--x:${item.x};--y:${item.y}" title="${escapeHtml(item.district)}">${escapeHtml(item.district)}</span>
         `
       )
       .join("")}`;
@@ -550,24 +553,30 @@ function renderNetwork() {
   const districtCases = selectedCases();
   const primaryCase = districtCases[0] || cases[0];
   const linkedCase = districtCases[1] || cases[1];
+  const isMissing = (value) => !value || /^(not provided|n\/a|unknown|null)$/i.test(String(value).trim());
+  const firstAvailable = (...values) => values.find((value) => !isMissing(value)) || "Unavailable";
+  const shortLabel = (value) => {
+    const text = String(value || "Unavailable");
+    return text.length > 22 ? `${text.slice(0, 19)}...` : text;
+  };
   const nodes = [
-    { id: primaryCase.suspect, x: 350, y: 160, type: "suspect", confidence: 95 },
-    { id: primaryCase.id, x: 190, y: 245, type: "case", confidence: 100 },
-    { id: primaryCase.vehicle, x: 520, y: 240, type: "vehicle", confidence: 88 },
-    { id: primaryCase.phone, x: 350, y: 340, type: "phone", confidence: 92 },
-    { id: linkedCase.id, x: 570, y: 390, type: "case", confidence: 85 },
-    { id: linkedCase.suspect, x: 195, y: 405, type: "suspect", confidence: 78 },
+    { key: "primary-person", label: firstAvailable(primaryCase.suspect, primaryCase.officer, primaryCase.policeStation), x: 350, y: 160, type: "suspect", confidence: 95 },
+    { key: "primary-case", label: primaryCase.id, x: 190, y: 245, type: "case", confidence: 100 },
+    { key: "primary-context", label: firstAvailable(primaryCase.vehicle, primaryCase.offence, primaryCase.district), x: 520, y: 240, type: "vehicle", confidence: 88 },
+    { key: "primary-location", label: firstAvailable(primaryCase.phone, primaryCase.policeStation, primaryCase.district), x: 350, y: 340, type: "phone", confidence: 92 },
+    { key: "linked-case", label: linkedCase.id, x: 570, y: 390, type: "case", confidence: 85 },
+    { key: "linked-person", label: firstAvailable(linkedCase.suspect, linkedCase.officer, linkedCase.policeStation), x: 195, y: 405, type: "suspect", confidence: 78 },
   ];
   const links = [
-    [primaryCase.suspect, primaryCase.id, 95],
-    [primaryCase.suspect, primaryCase.vehicle, 88],
-    [primaryCase.suspect, primaryCase.phone, 92],
-    [primaryCase.phone, linkedCase.id, 85],
-    [linkedCase.id, linkedCase.suspect, 78],
-    [primaryCase.id, primaryCase.vehicle, 90],
+    ["primary-person", "primary-case", 95],
+    ["primary-person", "primary-context", 88],
+    ["primary-person", "primary-location", 92],
+    ["primary-location", "linked-case", 85],
+    ["linked-case", "linked-person", 78],
+    ["primary-case", "primary-context", 90],
   ];
   const color = { suspect: "#d95d39", case: "#0f8b8d", vehicle: "#c48118", phone: "#287d3c" };
-  const byId = Object.fromEntries(nodes.map((node) => [node.id, node]));
+  const byId = Object.fromEntries(nodes.map((node) => [node.key, node]));
   svg.innerHTML = `
     ${links
       .map(([from, to, confidence]) => `
@@ -579,8 +588,8 @@ function renderNetwork() {
       .map(
         (node) => `
           <circle class="node" cx="${node.x}" cy="${node.y}" r="${node.type === "suspect" ? 38 : 32}" fill="${color[node.type]}"></circle>
-          <text class="node-label" x="${node.x}" y="${node.y + 56}" text-anchor="middle">${node.id}</text>
-          <title>${node.id} - Confidence: ${node.confidence}%</title>
+          <text class="node-label" x="${node.x}" y="${node.y + 56}" text-anchor="middle">${escapeHtml(shortLabel(node.label))}</text>
+          <title>${escapeHtml(node.label)} - Confidence: ${node.confidence}%</title>
         `
       )
       .join("")}`;
@@ -1441,6 +1450,13 @@ function bindEvents() {
   if (themeToggle) {
     themeToggle.textContent = state.theme === "dark" ? "☀️" : "🌙";
     themeToggle.addEventListener("click", toggleTheme);
+  }
+  const logoutButton = document.getElementById("logout-button");
+  if (logoutButton) {
+    logoutButton.addEventListener("click", async () => {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/login.html';
+    });
   }
 
   // Export PDF

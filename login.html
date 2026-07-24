@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Secure Login | Crime Analytics</title>
+    <style>
+      :root {
+        --ink: #0b1720;
+        --muted: #52606d;
+        --line: #c8d2dc;
+        --accent: #0f7b7d;
+        --danger: #a8323f;
+        --surface: #ffffff;
+        --page: #eef3f6;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: var(--ink);
+        background: var(--page);
+      }
+
+      .login-shell {
+        width: min(100%, 420px);
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        box-shadow: 0 18px 48px rgba(23, 33, 43, 0.18);
+        padding: 28px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 28px;
+      }
+
+      .brand-mark {
+        width: 46px;
+        height: 46px;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #fff;
+        font-weight: 900;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 24px;
+        line-height: 1.15;
+      }
+
+      .brand span:last-child {
+        display: block;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      label {
+        display: grid;
+        gap: 7px;
+        margin-bottom: 16px;
+        color: #263846;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      input {
+        width: 100%;
+        min-height: 46px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0 12px;
+        color: var(--ink);
+        font: inherit;
+        font-weight: 700;
+        background: #fbfdfe;
+      }
+
+      input:focus {
+        outline: 3px solid rgba(15, 123, 125, 0.18);
+        border-color: var(--accent);
+      }
+
+      button {
+        width: 100%;
+        min-height: 46px;
+        border: 0;
+        border-radius: 8px;
+        color: #fff;
+        background: var(--accent);
+        font: inherit;
+        font-weight: 900;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        opacity: 0.7;
+        cursor: wait;
+      }
+
+      .error {
+        min-height: 20px;
+        margin: 0 0 14px;
+        color: var(--danger);
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .mode-switch {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        padding: 4px;
+        margin-bottom: 20px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #f7fafc;
+      }
+
+      .mode-switch button {
+        min-height: 38px;
+        color: var(--muted);
+        background: transparent;
+      }
+
+      .mode-switch button.active {
+        color: #fff;
+        background: var(--accent);
+      }
+
+      .note {
+        margin: 18px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="login-shell">
+      <div class="brand">
+        <span class="brand-mark">KSP</span>
+        <div>
+          <h1>Secure Login</h1>
+          <span>Crime Analytics Command</span>
+        </div>
+      </div>
+      <div class="mode-switch" role="tablist" aria-label="Authentication mode">
+        <button id="signin-tab" class="active" type="button" role="tab" aria-selected="true">Sign In</button>
+        <button id="signup-tab" type="button" role="tab" aria-selected="false">Sign Up</button>
+      </div>
+      <form id="auth-form" autocomplete="on">
+        <label>
+          Username
+          <input id="username" name="username" autocomplete="username" required autofocus />
+        </label>
+        <label>
+          Password
+          <input id="password" name="password" type="password" autocomplete="current-password" required />
+        </label>
+        <p id="error" class="error" aria-live="polite"></p>
+        <button id="submit" type="submit">Sign In</button>
+      </form>
+      <p id="note" class="note">Use the username and password you created during signup.</p>
+    </main>
+    <script>
+      const form = document.getElementById('auth-form');
+      const error = document.getElementById('error');
+      const submit = document.getElementById('submit');
+      const note = document.getElementById('note');
+      const signinTab = document.getElementById('signin-tab');
+      const signupTab = document.getElementById('signup-tab');
+      let mode = 'signin';
+
+      function setMode(nextMode) {
+        mode = nextMode;
+        const isSignup = mode === 'signup';
+        signinTab.classList.toggle('active', !isSignup);
+        signupTab.classList.toggle('active', isSignup);
+        signinTab.setAttribute('aria-selected', String(!isSignup));
+        signupTab.setAttribute('aria-selected', String(isSignup));
+        submit.textContent = isSignup ? 'Create Account' : 'Sign In';
+        note.textContent = isSignup
+          ? 'Choose a username and a password with at least 8 characters.'
+          : 'Use the username and password you created during signup.';
+        error.textContent = '';
+      }
+
+      signinTab.addEventListener('click', () => setMode('signin'));
+      signupTab.addEventListener('click', () => setMode('signup'));
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        error.textContent = '';
+        submit.disabled = true;
+        submit.textContent = mode === 'signup' ? 'Creating account...' : 'Signing in...';
+
+        try {
+          const response = await fetch(mode === 'signup' ? '/api/auth/signup' : '/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: document.getElementById('username').value.trim(),
+              password: document.getElementById('password').value,
+            }),
+          });
+          const body = await response.json();
+          if (!response.ok) throw new Error(body.error || 'Login failed.');
+          if (mode === 'signup') {
+            setMode('signin');
+            document.getElementById('password').value = '';
+            error.textContent = 'Account created. Sign in with your new credentials.';
+            return;
+          }
+          window.location.href = '/';
+        } catch (loginError) {
+          error.textContent = loginError.message;
+        } finally {
+          submit.disabled = false;
+          submit.textContent = mode === 'signup' ? 'Create Account' : 'Sign In';
+        }
+      });
+    </script>
+  </body>
+</html>

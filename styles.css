@@ -685,12 +685,18 @@ canvas {
   position: absolute;
   left: calc(var(--x) + 16px);
   top: calc(var(--y) + 10px);
+  max-width: 118px;
   padding: 4px 7px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid var(--line);
+  color: #0b1720;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid #5d7182;
   border-radius: 6px;
   font-size: 12px;
   font-weight: 800;
+  box-shadow: 0 4px 12px rgba(23, 33, 43, 0.16);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 #network-graph {

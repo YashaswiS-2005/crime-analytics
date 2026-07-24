@@ -3,6 +3,7 @@ const express = require('express');
 const path = require('path');
 const multer = require('multer');
 const csvParser = require('csv-parser');
+const crypto = require('crypto');
 const { Readable } = require('stream');
 const { MongoClient } = require('mongodb');
 const MLModelTrainer = require('./ml-trainer');
@@ -11,6 +12,93 @@ const app = express();
 const port = process.env.PORT || 3000;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 let mongoCases;
+
+const sessions = new Map();
+const loginAttempts = new Map();
+const sessionCookie = 'crime_session';
+const sessionTtlMs = 1000 * 60 * 60 * 8;
+const usersPath = path.join(__dirname, 'users.json');
+const users = new Map();
+
+function parseCookies(header = '') {
+  return Object.fromEntries(header.split(';').map((part) => {
+    const [key, ...value] = part.trim().split('=');
+    return [key, decodeURIComponent(value.join('=') || '')];
+  }).filter(([key]) => key));
+}
+
+function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
+  const hash = crypto.pbkdf2Sync(String(password || ''), salt, 120000, 32, 'sha256').toString('hex');
+  return { salt, hash };
+}
+
+function normaliseUsername(username) {
+  return String(username || '').trim().toLowerCase();
+}
+
+function validateCredentials(username, password) {
+  const cleanUsername = normaliseUsername(username);
+  if (!/^[a-z0-9._-]{3,32}$/.test(cleanUsername)) {
+    return { error: 'Username must be 3-32 characters using letters, numbers, dots, dashes, or underscores.' };
+  }
+  if (String(password || '').length < 8) {
+    return { error: 'Password must be at least 8 characters.' };
+  }
+  return { username: cleanUsername };
+}
+
+function verifyPassword(password, user) {
+  if (!user?.salt || !user?.hash) return false;
+  const attempt = hashPassword(password, user.salt).hash;
+  const stored = Buffer.from(user.hash, 'hex');
+  const incoming = Buffer.from(attempt, 'hex');
+  return stored.length === incoming.length && crypto.timingSafeEqual(stored, incoming);
+}
+
+function loadUsers() {
+  try {
+    const fileData = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+    Object.entries(fileData.users || {}).forEach(([username, user]) => {
+      users.set(normaliseUsername(username), user);
+    });
+    console.log(`Loaded ${users.size} user account${users.size === 1 ? '' : 's'} from users.json`);
+  } catch (error) {
+    console.warn('Could not load users.json. New users can sign up from the login page.', error.message);
+  }
+}
+
+function writeUsers() {
+  try {
+    fs.writeFileSync(usersPath, JSON.stringify({ users: Object.fromEntries(users) }, null, 2), 'utf8');
+  } catch (writeError) {
+    console.warn('Unable to persist users.json:', writeError.message);
+  }
+}
+
+function sessionOptions(req) {
+  const secure = req.secure || req.headers['x-forwarded-proto'] === 'https' || process.env.NODE_ENV === 'production';
+  return `HttpOnly; SameSite=Strict; Path=/; Max-Age=${Math.floor(sessionTtlMs / 1000)}${secure ? '; Secure' : ''}`;
+}
+
+function getSession(req) {
+  const token = parseCookies(req.headers.cookie)[sessionCookie];
+  if (!token) return null;
+  const session = sessions.get(token);
+  if (!session || session.expiresAt < Date.now()) {
+    sessions.delete(token);
+    return null;
+  }
+  session.expiresAt = Date.now() + sessionTtlMs;
+  return session;
+}
+
+function requireAuth(req, res, next) {
+  if (getSession(req)) return next();
+  if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Authentication required.' });
+  return res.redirect('/login.html');
+}
+
+loadUsers();
 
 // Initialize ML Model Trainer
 const mlTrainer = new MLModelTrainer();
@@ -167,8 +255,77 @@ try {
   console.warn('Could not load data.json. Using built-in sample data.', error.message);
 }
 
-app.use(express.static(path.join(__dirname)));
 app.use(express.json());
+
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'same-origin');
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
+
+app.get('/login.html', (req, res) => {
+  if (getSession(req)) return res.redirect('/');
+  return res.sendFile(path.join(__dirname, 'login.html'));
+});
+
+app.post('/api/auth/signup', (req, res) => {
+  const { username, password } = req.body || {};
+  const validation = validateCredentials(username, password);
+  if (validation.error) return res.status(400).json({ error: validation.error });
+  if (users.has(validation.username)) return res.status(409).json({ error: 'That username is already registered.' });
+
+  users.set(validation.username, {
+    ...hashPassword(password),
+    createdAt: new Date().toISOString(),
+  });
+  writeUsers();
+
+  res.status(201).json({ user: { username: validation.username } });
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const ip = req.ip || req.socket.remoteAddress || 'local';
+  const attempt = loginAttempts.get(ip) || { count: 0, lockedUntil: 0 };
+  if (attempt.lockedUntil > Date.now()) {
+    return res.status(429).json({ error: 'Too many login attempts. Try again in a few minutes.' });
+  }
+
+  const { username, password } = req.body || {};
+  const cleanUsername = normaliseUsername(username);
+  const user = users.get(cleanUsername);
+  if (!user || !verifyPassword(password, user)) {
+    const count = attempt.count + 1;
+    loginAttempts.set(ip, {
+      count,
+      lockedUntil: count >= 5 ? Date.now() + 1000 * 60 * 5 : 0,
+    });
+    return res.status(401).json({ error: 'Invalid username or password.' });
+  }
+
+  loginAttempts.delete(ip);
+  const token = crypto.randomBytes(32).toString('hex');
+  sessions.set(token, { username: cleanUsername, expiresAt: Date.now() + sessionTtlMs });
+  res.setHeader('Set-Cookie', `${sessionCookie}=${encodeURIComponent(token)}; ${sessionOptions(req)}`);
+  res.json({ user: { username: cleanUsername } });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  const token = parseCookies(req.headers.cookie)[sessionCookie];
+  if (token) sessions.delete(token);
+  res.setHeader('Set-Cookie', `${sessionCookie}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`);
+  res.json({ success: true });
+});
+
+app.get('/api/auth/session', (req, res) => {
+  const session = getSession(req);
+  if (!session) return res.status(401).json({ error: 'Authentication required.' });
+  res.json({ user: { username: session.username } });
+});
+
+app.use(requireAuth);
+app.use(express.static(path.join(__dirname)));
 app.use('/vendor/papaparse', express.static(path.join(__dirname, 'node_modules', 'papaparse')));
 
 const canonical = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
