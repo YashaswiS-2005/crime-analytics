@@ -1,0 +1,24 @@
+JWT_SECRET is not configured. Using an ephemeral development secret.
+JWT_REFRESH_SECRET is not configured. Using an ephemeral development secret.
+MongoDB URI not configured. Local JSON fallback is enabled for development.
+node:events:496
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3000
+    at Server.setupListenHandle [as _listen2] (node:net:1939:16)
+    at listenInCluster (node:net:1996:12)
+    at Server.listen (node:net:2101:7)
+    at Function.listen (D:\crime-analytics\node_modules\express\lib\application.js:635:24)
+    at start (file:///D:/crime-analytics/src/server.js:96:22)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1975:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}
+
+Node.js v22.15.0

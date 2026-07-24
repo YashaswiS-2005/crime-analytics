@@ -120,6 +120,10 @@
         font-weight: 800;
       }
 
+      .error.success {
+        color: var(--accent);
+      }
+
       .mode-switch {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -155,7 +159,7 @@
       <div class="brand">
         <span class="brand-mark">KSP</span>
         <div>
-          <h1>Secure Login</h1>
+          <h1 id="auth-title">Authenticate Credentials</h1>
           <span>Crime Analytics Command</span>
         </div>
       </div>
@@ -169,13 +173,17 @@
           <input id="username" name="username" autocomplete="username" required autofocus />
         </label>
         <label>
+          Email
+          <input id="email" name="email" type="email" autocomplete="email" required />
+        </label>
+        <label>
           Password
           <input id="password" name="password" type="password" autocomplete="current-password" required />
         </label>
         <p id="error" class="error" aria-live="polite"></p>
         <button id="submit" type="submit">Sign In</button>
       </form>
-      <p id="note" class="note">Use the username and password you created during signup.</p>
+      <p id="note" class="note">Enter the username, email, and password from signup to authenticate.</p>
     </main>
     <script>
       const form = document.getElementById('auth-form');
@@ -184,7 +192,13 @@
       const note = document.getElementById('note');
       const signinTab = document.getElementById('signin-tab');
       const signupTab = document.getElementById('signup-tab');
+      const authTitle = document.getElementById('auth-title');
       let mode = 'signin';
+
+      function setStatus(message = '', type = 'error') {
+        error.textContent = message;
+        error.classList.toggle('success', type === 'success');
+      }
 
       function setMode(nextMode) {
         mode = nextMode;
@@ -193,11 +207,18 @@
         signupTab.classList.toggle('active', isSignup);
         signinTab.setAttribute('aria-selected', String(!isSignup));
         signupTab.setAttribute('aria-selected', String(isSignup));
+        authTitle.textContent = isSignup ? 'Create Account' : 'Authenticate Credentials';
         submit.textContent = isSignup ? 'Create Account' : 'Sign In';
+        document.getElementById('password').autocomplete = isSignup ? 'new-password' : 'current-password';
         note.textContent = isSignup
-          ? 'Choose a username and a password with at least 8 characters.'
-          : 'Use the username and password you created during signup.';
-        error.textContent = '';
+          ? 'Create an account with a username, email, and a password of at least 8 characters.'
+          : 'Enter the username, email, and password from signup to authenticate.';
+        setStatus();
+      }
+
+      function showSignupAfterMissingAccount(message) {
+        setMode('signup');
+        setStatus(message || 'Create your account first, then return to sign in.');
       }
 
       signinTab.addEventListener('click', () => setMode('signin'));
@@ -205,7 +226,7 @@
 
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
-        error.textContent = '';
+        setStatus();
         submit.disabled = true;
         submit.textContent = mode === 'signup' ? 'Creating account...' : 'Signing in...';
 
@@ -215,20 +236,27 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               username: document.getElementById('username').value.trim(),
+              email: document.getElementById('email').value.trim(),
               password: document.getElementById('password').value,
             }),
           });
           const body = await response.json();
-          if (!response.ok) throw new Error(body.error || 'Login failed.');
+          if (!response.ok) {
+            if (mode === 'signin' && body.error?.code === 'USER_NOT_FOUND') {
+              showSignupAfterMissingAccount(body.error.message);
+              return;
+            }
+            throw new Error(body.error?.message || body.message || 'Authentication failed.');
+          }
           if (mode === 'signup') {
             setMode('signin');
-            document.getElementById('password').value = '';
-            error.textContent = 'Account created. Sign in with your new credentials.';
+            setStatus('Account created. Authenticate with the same signup credentials to continue.', 'success');
+            document.getElementById('password').focus();
             return;
           }
           window.location.href = '/';
         } catch (loginError) {
-          error.textContent = loginError.message;
+          setStatus(loginError.message);
         } finally {
           submit.disabled = false;
           submit.textContent = mode === 'signup' ? 'Create Account' : 'Sign In';

@@ -449,7 +449,7 @@ function renderDistrictBars() {
     .join("");
 }
 
-function renderTopDistricts() {
+function renderTopDistrictsLegacy() {
   const rows = selectedDistricts().sort((a, b) => b.hotspot - a.hotspot).slice(0, 5);
   const container = document.getElementById("top-districts-ranking");
   if (!container) return;
@@ -486,18 +486,78 @@ function renderSignals() {
   document.getElementById("alerts").innerHTML = alerts.map((item) => `<article class="alert"><p>${item}</p></article>`).join("");
 }
 
+function renderTopDistricts() {
+  const rows = selectedDistricts().sort((a, b) => b.hotspot - a.hotspot).slice(0, 5);
+  const markup = rows
+    .map((item, index) => {
+      const level = item.hotspot >= 70 ? "high" : item.hotspot >= 50 ? "medium" : "low";
+      const action = level === "high" ? "Priority" : level === "medium" ? "Watch" : "Stable";
+      return `
+        <div class="ranking-item ${level}">
+          <div class="ranking-badge">${index + 1}</div>
+          <div class="ranking-info">
+            <h3>${escapeHtml(item.name)}</h3>
+            <div class="ranking-score">Hotspot score ${item.hotspot}/100</div>
+            <div class="ranking-stat">
+              <span>${item.cases.toLocaleString("en-IN")} cases</span>
+              <span>${item.solved}% solved</span>
+            </div>
+          </div>
+          <div class="ranking-action">
+            <span class="risk-pill ${level}">${action}</span>
+            <small>${item.growth >= 0 ? "+" : ""}${item.growth}% trend</small>
+          </div>
+        </div>`;
+    })
+    .join("");
+
+  ["top-districts-ranking", "hotspot-priority-ranking"].forEach((id) => {
+    const container = document.getElementById(id);
+    if (container) container.innerHTML = markup;
+  });
+}
+
 function renderMap() {
   const rows = selectedHotspots();
   const visibleRows = state.district === "All"
     ? [...rows].sort((a, b) => b.score - a.score).slice(0, 12)
     : rows;
+  const summary = document.getElementById("hotspot-summary");
+  const highCount = rows.filter((item) => item.risk === "high").length;
+  const mediumCount = rows.filter((item) => item.risk === "medium").length;
+  const topHotspot = [...rows].sort((a, b) => b.score - a.score)[0];
+
+  if (summary) {
+    summary.innerHTML = [
+      ["Top district", topHotspot?.district || "None", topHotspot ? `${topHotspot.score}/100 score` : "No hotspot data"],
+      ["High priority", highCount, "districts need immediate focus"],
+      ["Watchlist", mediumCount, "districts showing repeat patterns"],
+    ].map(([label, value, detail]) => `
+      <article class="hotspot-metric">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+        <small>${escapeHtml(detail)}</small>
+      </article>
+    `).join("");
+  }
+
   document.getElementById("map").innerHTML = `
+    <div class="map-grid"></div>
     <div class="map-outline"></div>
+    <div class="map-caption">
+      <strong>Karnataka hotspot view</strong>
+      <span>Marker size and color represent district score.</span>
+    </div>
     ${visibleRows
       .map(
-        (item) => `
-          <span class="hotspot ${item.risk}" style="--x:${item.x};--y:${item.y};--size:${46 + item.score / 2}px">${item.score}</span>
-          <span class="map-label" style="--x:${item.x};--y:${item.y}" title="${escapeHtml(item.district)}">${escapeHtml(item.district)}</span>
+        (item, index) => `
+          <button class="hotspot ${item.risk}" type="button" style="--x:${item.x};--y:${item.y};--size:${34 + item.score / 3}px" aria-label="${escapeHtml(item.district)} hotspot score ${item.score}">
+            <span>${index + 1}</span>
+          </button>
+          <span class="map-label ${item.risk}" style="--x:${item.x};--y:${item.y}" title="${escapeHtml(item.district)}">
+            <strong>${index + 1}. ${escapeHtml(item.district)}</strong>
+            <small>${item.score}/100</small>
+          </span>
         `
       )
       .join("")}`;
@@ -539,10 +599,10 @@ function renderPredictions() {
   document.getElementById("prediction-list").innerHTML = ordered
     .map(
       (item) => `
-        <article class="case-card">
+        <article class="case-card hotspot-action ${item.risk}">
           <h3>${item.district}</h3>
-          <p>Rule-based hotspot score: ${item.score}/100. Recommended: deploy patrol visibility and verify repeat-offender movement.</p>
-          <div class="case-meta"><span>${item.risk.toUpperCase()}</span><span>Based on loaded FIR volume</span></div>
+          <p>${item.risk === "high" ? "Deploy visible patrols and review nearby repeat identifiers." : item.risk === "medium" ? "Keep on watchlist and compare fresh FIRs with recent patterns." : "Continue routine monitoring and data quality checks."}</p>
+          <div class="case-meta"><span>${item.score}/100 score</span><span>${item.risk.toUpperCase()}</span></div>
         </article>`
     )
     .join("");

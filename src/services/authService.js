@@ -19,6 +19,10 @@ function normalizeUsername(username) {
   return String(username || '').trim().toLowerCase();
 }
 
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
 function userDto(user) {
   return {
     id: String(user._id || user.id || user.username),
@@ -72,19 +76,20 @@ async function verifyMemoryPassword(password, user) {
 
 function validateCredentials({ username, password, email, role }) {
   const normalizedUsername = normalizeUsername(username);
+  const normalizedEmail = normalizeEmail(email);
   if (!/^[a-z0-9._-]{3,32}$/.test(normalizedUsername)) {
     throw new AppError('Username must be 3-32 characters using letters, numbers, dots, dashes, or underscores.', 400, 'INVALID_USERNAME');
   }
   if (String(password || '').length < 8) {
     throw new AppError('Password must be at least 8 characters.', 400, 'INVALID_PASSWORD');
   }
-  if (email && !/^\S+@\S+\.\S+$/.test(String(email))) {
+  if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
     throw new AppError('Email address is invalid.', 400, 'INVALID_EMAIL');
   }
   if (role && !['Admin', 'Analyst', 'Officer'].includes(role)) {
     throw new AppError('Role must be Admin, Analyst, or Officer.', 400, 'INVALID_ROLE');
   }
-  return { username: normalizedUsername, password, email, role: role || 'Analyst' };
+  return { username: normalizedUsername, password, email: normalizedEmail, role: role || 'Analyst' };
 }
 
 export function signToken(user, type = 'access') {
@@ -137,7 +142,7 @@ export async function registerUser(input = {}) {
 
   if (isMongoReady()) {
     const user = await User.create(payload);
-    return createSession(user);
+    return { user: userDto(user) };
   }
 
   loadMemoryUsers();
@@ -156,25 +161,36 @@ export async function registerUser(input = {}) {
   };
   memoryUsers.set(payload.username, user);
   persistMemoryUsers();
-  return createSession(user);
+  return { user: userDto(user) };
 }
 
 export async function loginUser(input = {}) {
   const username = normalizeUsername(input.username);
+  const email = normalizeEmail(input.email);
   const password = input.password;
+
+  if (!/^\S+@\S+\.\S+$/.test(email)) {
+    throw new AppError('Email address is invalid.', 400, 'INVALID_EMAIL');
+  }
 
   if (isMongoReady()) {
     const user = await User.findOne({ username }).select('+password +refreshTokens');
-    if (!user || !(await user.comparePassword(password))) {
-      throw new AppError('Invalid username or password.', 401, 'INVALID_CREDENTIALS');
+    if (!user) {
+      throw new AppError('No account was found for those sign in details. Please sign up to continue.', 404, 'USER_NOT_FOUND');
+    }
+    if (normalizeEmail(user.email) !== email || !(await user.comparePassword(password))) {
+      throw new AppError('Invalid username, email, or password.', 401, 'INVALID_CREDENTIALS');
     }
     return createSession(user);
   }
 
   loadMemoryUsers();
   const user = memoryUsers.get(username);
-  if (!user || !(await verifyMemoryPassword(password, user))) {
-    throw new AppError('Invalid username or password.', 401, 'INVALID_CREDENTIALS');
+  if (!user) {
+    throw new AppError('No account was found for those sign in details. Please sign up to continue.', 404, 'USER_NOT_FOUND');
+  }
+  if (normalizeEmail(user.email) !== email || !(await verifyMemoryPassword(password, user))) {
+    throw new AppError('Invalid username, email, or password.', 401, 'INVALID_CREDENTIALS');
   }
 
   if (!user.passwordHash) {

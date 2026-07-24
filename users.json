@@ -4,9 +4,14 @@
       "username": "prathi",
       "role": "Analyst",
       "email": "",
-      "salt": "4221826678c93ce194b242d476e99baf",
-      "hash": "788cae8223026f591d76873bb1af36cd06019ae4f3c8723f6bbb7a7f5172db08",
-      "createdAt": "2026-07-24T05:05:25.065Z"
+      "createdAt": "2026-07-24T05:05:25.065Z",
+      "passwordHash": "$2b$12$eJ.XZSFNvKO/DRS/.XnmEOXrwox4Izw7Dw2F3DrdDXBFsl2fQHIjm",
+      "refreshTokens": [
+        {
+          "tokenHash": "4cde3eff3348a6634681b5b3a32d72975c6575beb595e812eee98a68efb7d2cc",
+          "expiresAt": "2026-07-31T13:55:02.000Z"
+        }
+      ]
     },
     "apeksha": {
       "username": "apeksha",
@@ -20,6 +25,70 @@
           "expiresAt": "2026-07-31T12:21:36.000Z"
         }
       ]
+    },
+    "testuser831110843": {
+      "username": "testuser831110843",
+      "role": "Analyst",
+      "email": "test@example.com",
+      "_id": "testuser831110843",
+      "passwordHash": "$2b$12$QUpHcsTvwPxZmLUd7zyJjeXa1KyT9aUHHND59pQNrGoIOufvA3dDu",
+      "refreshTokens": [
+        {
+          "tokenHash": "c13e7db2f6ed7d47c70357191712633c743ad6ec7f436a948391cab5e6b789ed",
+          "expiresAt": "2026-07-31T13:46:50.000Z"
+        }
+      ],
+      "createdAt": "2026-07-24T13:46:50.217Z"
+    },
+    "uiuser2082617911": {
+      "username": "uiuser2082617911",
+      "role": "Analyst",
+      "email": "",
+      "_id": "uiuser2082617911",
+      "passwordHash": "$2b$12$RwJsxQf3Nuo/SSfrDoxnfunLl8oH/SufJMEG3uM0AhcdyU6bY2oEq",
+      "refreshTokens": [
+        {
+          "tokenHash": "9299196aa0f366c46cdbc7c88f26e2b79ffd17e3504b74324270e2470a91b40d",
+          "expiresAt": "2026-07-31T13:47:02.000Z"
+        },
+        {
+          "tokenHash": "08ad717b03cccebf2e4149656e30be77fc02403e7440bbf1b2623bb85806914b",
+          "expiresAt": "2026-07-31T13:47:21.000Z"
+        }
+      ],
+      "createdAt": "2026-07-24T13:47:02.915Z"
+    },
+    "prathiksha": {
+      "username": "prathiksha",
+      "role": "Analyst",
+      "email": "hcprathiksha@gmail.com",
+      "_id": "prathiksha",
+      "passwordHash": "$2b$12$iHGmCSmwG8q85j9Hh7IAO.V/KYGXS1NMioNPYZfwnF.y3oSFBZQDK",
+      "refreshTokens": [
+        {
+          "tokenHash": "0badceebf5e283e6b950993688e7c6f3b78c599f83e2a9a52595fca0ce85214d",
+          "expiresAt": "2026-07-31T14:14:14.000Z"
+        }
+      ],
+      "createdAt": "2026-07-24T14:14:14.227Z"
+    },
+    "pra": {
+      "_id": "pra",
+      "username": "pra",
+      "email": "hcprathiksha@gmail.com",
+      "role": "Analyst",
+      "passwordHash": "$2b$12$XD7rzFNydvcJ3zw4qO3Pwey9QVYSd4qHvPmMsaDlTOMiwkDlqHeOK",
+      "refreshTokens": [
+        {
+          "tokenHash": "8b0d5678cc06960c84e4e9af1472e727478d9d3655c79458b86bd08f3cd8ccf7",
+          "expiresAt": "2026-07-31T14:28:34.000Z"
+        },
+        {
+          "tokenHash": "664122fc3875b702f3cd78203c2fb3f520963e1e718bd968000fff54cb1d0402",
+          "expiresAt": "2026-07-31T14:28:42.000Z"
+        }
+      ],
+      "createdAt": "2026-07-24T14:28:34.722Z"
     }
   }
 }

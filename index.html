@@ -127,33 +127,35 @@
               <div class="panel-header">
                 <div>
                   <h2>Hotspot Detection</h2>
-                  <p>District hotspot visualization</p>
+                  <p>Ranked district risk with case volume and response focus</p>
                 </div>
                 <span class="risk-pill high">Live Risk</span>
               </div>
+              <div id="hotspot-summary" class="hotspot-summary"></div>
               <div id="map" class="map-surface" aria-label="Karnataka hotspot map"></div>
               <div class="hotspot-legend">
                 <div class="legend-item">
                   <span class="legend-dot high"></span>
-                  <span>High-risk cases</span>
+                  <span>High: immediate patrol focus</span>
                 </div>
                 <div class="legend-item">
                   <span class="legend-dot medium"></span>
-                  <span>Medium-risk cases</span>
+                  <span>Medium: watchlist</span>
                 </div>
                 <div class="legend-item">
                   <span class="legend-dot low"></span>
-                  <span>Low-risk cases</span>
+                  <span>Low: routine monitoring</span>
                 </div>
               </div>
             </section>
             <section class="panel">
               <div class="panel-header">
                 <div>
-                  <h2>Prediction Queue</h2>
-                  <p>Hotspot probability and recommended action</p>
+                  <h2>District Priority</h2>
+                  <p>Clear action queue for the selected area</p>
                 </div>
               </div>
+              <div id="hotspot-priority-ranking" class="ranking-list hotspot-ranking"></div>
               <div id="prediction-list" class="case-list"></div>
             </section>
           </div>
