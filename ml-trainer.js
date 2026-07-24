@@ -267,10 +267,12 @@ class MLModelTrainer {
       features[4] * (this.model?.weights[4] || 0.25) +
       (this.model?.bias || 0.1);
 
-    const confidence = Math.abs(rawPrediction - 0.5) * 2; // 0-1 scale
+    const boundedScore = Math.min(1, Math.max(0, rawPrediction));
+    const confidence = Math.abs(boundedScore - 0.5) * 2; // 0-1 scale
 
     return {
       predictedRisk: risk,
+      riskScore: Number((boundedScore * 100).toFixed(1)),
       confidence: Math.min(1, Math.max(0, confidence)).toFixed(2),
       features: {
         district: features[0],

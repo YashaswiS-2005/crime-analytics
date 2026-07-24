@@ -7919,7 +7919,17 @@
       "score": 30
     }
   ],
-  "alerts": [],
+  "alerts": [
+    "1637997: AI model predicts Medium risk (50.7% score, 1% confidence) for NARCOTIC DRUGS & PSHYCOTROPIC SUBSTANCES in Bagalkot.",
+    "1895578: AI model predicts Medium risk (50.7% score, 1% confidence) for NARCOTIC DRUGS & PSHYCOTROPIC SUBSTANCES in Bagalkot.",
+    "1802516: AI model predicts Medium risk (50.7% score, 1% confidence) for NARCOTIC DRUGS & PSHYCOTROPIC SUBSTANCES in Bagalkot.",
+    "1898733: AI model predicts Medium risk (50.6% score, 1% confidence) for POCSO in Bagalkot.",
+    "073034: AI model predicts Medium risk (50.6% score, 1% confidence) for MURDER in Bagalkot.",
+    "2390053: AI model predicts Medium risk (50.6% score, 1% confidence) for POCSO in Bagalkot.",
+    "1098843: AI model predicts Medium risk (50.6% score, 1% confidence) for MURDER in Bagalkot.",
+    "18986672: AI model predicts Medium risk (50.6% score, 1% confidence) for RAPE in Bagalkot.",
+    "AI context: Bagalkot has 395 cases in the current dataset."
+  ],
   "timeline": [
     {
       "time": "08:20",

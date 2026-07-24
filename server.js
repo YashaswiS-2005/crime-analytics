@@ -239,12 +239,91 @@ function scanCases(scope = cases) {
   return findings;
 }
 
-app.get('/api/alerts/scan', (req, res) => {
-  const findings = scanCases();
-  alerts.length = 0;
-  alerts.push(...findings.map((finding) => finding.message));
-  writeData();
-  res.json({ scanned: cases.length, findings, completedAt: new Date().toISOString() });
+function riskRank(risk) {
+  return { Low: 1, Medium: 2, High: 3 }[risk] || 0;
+}
+
+function scanCasesWithModel(scope = cases) {
+  const scored = scope
+    .filter((item) => item && item.district && item.offence)
+    .map((item) => {
+      const prediction = mlTrainer.predictCaseRisk(item);
+      return {
+        case: item,
+        prediction,
+        escalation: riskRank(prediction.predictedRisk) - riskRank(item.risk),
+      };
+    })
+    .sort((a, b) => {
+      if (riskRank(b.prediction.predictedRisk) !== riskRank(a.prediction.predictedRisk)) {
+        return riskRank(b.prediction.predictedRisk) - riskRank(a.prediction.predictedRisk);
+      }
+      return Number(b.prediction.riskScore || 0) - Number(a.prediction.riskScore || 0);
+    });
+
+  const findings = scored.slice(0, 8).map(({ case: item, prediction, escalation }) => ({
+    type: escalation > 0 ? 'AI risk escalation' : 'AI priority case',
+    severity: prediction.predictedRisk,
+    cases: [item.id],
+    prediction,
+    message: `${item.id}: AI model predicts ${prediction.predictedRisk} risk (${prediction.riskScore}% score, ${Math.round(Number(prediction.confidence) * 100)}% confidence) for ${item.offence} in ${item.district}.`,
+  }));
+
+  const highVolumeRule = scanCases(scope).find((finding) => finding.type === 'High-volume area');
+  if (highVolumeRule) {
+    findings.push({
+      ...highVolumeRule,
+      type: 'AI context signal',
+      message: `AI context: ${highVolumeRule.message}`,
+    });
+  }
+
+  return { findings, scored };
+}
+
+app.get('/api/alerts/scan', async (req, res) => {
+  try {
+    let modelInfo = mlTrainer.getModelInfo();
+    let autoTrained = false;
+
+    if (!modelInfo.isTrained && cases.length >= 2) {
+      const training = await mlTrainer.trainModel(cases, 50);
+      if (training.error) throw new Error(training.error);
+      autoTrained = true;
+      modelInfo = mlTrainer.getModelInfo();
+    }
+
+    if (!modelInfo.isTrained) {
+      return res.status(400).json({
+        error: 'AI model is not trained yet. Import or add at least two cases, then run the scan again.',
+      });
+    }
+
+    const { findings, scored } = scanCasesWithModel();
+    alerts.length = 0;
+    alerts.push(...findings.map((finding) => finding.message));
+    writeData();
+
+    res.json({
+      scanned: cases.length,
+      aiPowered: true,
+      autoTrained,
+      modelStats: modelInfo.stats,
+      findings,
+      predictions: scored.slice(0, 25).map(({ case: item, prediction }) => ({
+        id: item.id,
+        district: item.district,
+        offence: item.offence,
+        currentRisk: item.risk,
+        predictedRisk: prediction.predictedRisk,
+        riskScore: prediction.riskScore,
+        confidence: prediction.confidence,
+      })),
+      completedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({ error: `AI alert scan failed: ${error.message}` });
+  }
 });
 
 app.post('/api/cases', (req, res) => {

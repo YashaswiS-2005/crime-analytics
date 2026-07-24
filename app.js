@@ -104,6 +104,7 @@ let trends = defaultData.trends;
 let hotspots = defaultData.hotspots;
 let alerts = defaultData.alerts;
 let timeline = defaultData.timeline;
+let aiPredictions = [];
 
 async function loadData() {
   try {
@@ -132,6 +133,8 @@ const state = {
   theme: localStorage.getItem("crimeAppTheme") || "light",
   realtimeEnabled: true,
   realtimeInterval: null,
+  alertedCaseKeys: new Set(),
+  scanInProgress: false,
 };
 
 const titles = {
@@ -159,6 +162,39 @@ function selectedCases() {
 function selectedHotspots() {
   if (state.district === "All") return hotspots;
   return hotspots.filter((item) => item.district === state.district);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[char]));
+}
+
+function crimeType(offence) {
+  const text = String(offence || "").toLowerCase();
+  if (text.includes("vehicle") || text.includes("motor")) return "vehicle";
+  if (text.includes("cyber") || text.includes("upi") || text.includes("fraud")) return "cyber";
+  if (text.includes("burglary") || text.includes("theft")) return "theft";
+  if (text.includes("robbery") || text.includes("snatching")) return "street";
+  if (text.includes("narcotic") || text.includes("ndps")) return "narcotics";
+  if (text.includes("murder") || text.includes("pocso") || text.includes("rape")) return "violent";
+  return "other";
+}
+
+function crimeTypeLabel(type) {
+  return {
+    vehicle: "Vehicle",
+    cyber: "Cyber",
+    theft: "Theft",
+    street: "Street",
+    narcotics: "Narcotics",
+    violent: "Violent",
+    other: "Other",
+  }[type] || "Other";
 }
 
 function csvRows(text) {
@@ -292,19 +328,19 @@ function drawTrendChart() {
   const canvas = document.getElementById("trend-chart");
   const ctx = canvas.getContext("2d");
   const scale = window.devicePixelRatio || 1;
-  const width = canvas.clientWidth;
-  const height = Number(canvas.getAttribute("height"));
+  const width = canvas.clientWidth || 1;
+  const height = canvas.clientHeight || Number(canvas.getAttribute("height")) || 280;
   canvas.width = width * scale;
   canvas.height = height * scale;
   ctx.scale(scale, scale);
   ctx.clearRect(0, 0, width, height);
 
-  const padding = 34;
+  const padding = 44;
   // Descriptive chart only: do not invent a forecast without a trained model.
   const values = trends.length ? trends : [0];
   const min = Math.min(...values) - 35;
   const max = Math.max(...values) + 35;
-  const stepX = (width - padding * 2) / (values.length - 1);
+  const stepX = values.length > 1 ? (width - padding * 2) / (values.length - 1) : 0;
 
   ctx.strokeStyle = "#d8e0e8";
   ctx.lineWidth = 1;
@@ -314,6 +350,12 @@ function drawTrendChart() {
     ctx.moveTo(padding, y);
     ctx.lineTo(width - padding, y);
     ctx.stroke();
+
+    const tickValue = Math.round(max - ((max - min) / 4) * i);
+    ctx.fillStyle = "#647485";
+    ctx.font = "11px Segoe UI, Arial";
+    ctx.textAlign = "right";
+    ctx.fillText(String(tickValue), padding - 8, y + 4);
   }
 
   const points = values.map((value, index) => ({
@@ -339,10 +381,27 @@ function drawTrendChart() {
 
   ctx.fillStyle = "#647485";
   ctx.font = "12px Segoe UI, Arial";
-  ctx.fillText("Actual", padding, 18);
+  ctx.textAlign = "left";
+  ctx.fillText("Actual reported incidents", padding, 18);
+
+  ctx.font = "11px Segoe UI, Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("Available data period", width / 2, height - 8);
+  ctx.save();
+  ctx.translate(13, height / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText("Reported incidents", 0, 0);
+  ctx.restore();
+
+  ctx.textAlign = "center";
+  const xLabels = values.length >= 10 ? ["Start", "Mid", "Latest"] : values.map((_, index) => `P${index + 1}`);
+  const xPositions = values.length >= 10 ? [padding, width / 2, width - padding] : values.map((_, index) => padding + stepX * index);
+  xLabels.forEach((label, index) => {
+    ctx.fillText(label, xPositions[index], height - padding + 22);
+  });
   
   // Add chart tooltip interaction
-  canvas.addEventListener("mousemove", (event) => {
+  canvas.onmousemove = (event) => {
     const tooltip = document.getElementById("trend-tooltip");
     if (!tooltip) return;
     
@@ -364,12 +423,12 @@ function drawTrendChart() {
     }
     
     tooltip.classList.remove("active");
-  });
+  };
   
-  canvas.addEventListener("mouseleave", () => {
+  canvas.onmouseleave = () => {
     const tooltip = document.getElementById("trend-tooltip");
     if (tooltip) tooltip.classList.remove("active");
-  });
+  };
 }
 
 function renderDistrictBars() {
@@ -441,7 +500,38 @@ function renderMap() {
       .join("")}`;
 }
 
+function riskAction(prediction) {
+  const offence = String(prediction.offence || "").toLowerCase();
+  if (prediction.predictedRisk === "High" && offence.includes("vehicle")) {
+    return "Next likely pressure point: repeat theft near parking or transit zones. Increase vehicle checks and CCTV review.";
+  }
+  if (prediction.predictedRisk === "High" && offence.includes("cyber")) {
+    return "Next likely pressure point: more linked wallet or phone complaints. Freeze shared accounts and trace beneficiary overlap.";
+  }
+  if (prediction.predictedRisk === "High") {
+    return "Next likely pressure point: escalation or repeat activity in the same district. Move this case into priority review.";
+  }
+  if (prediction.predictedRisk === "Medium") {
+    return "Watch for repeat identifiers or nearby FIRs before this becomes a high-priority cluster.";
+  }
+  return "Low immediate escalation predicted; keep passive monitoring active.";
+}
+
 function renderPredictions() {
+  if (aiPredictions.length) {
+    document.getElementById("prediction-list").innerHTML = aiPredictions.slice(0, 8)
+      .map(
+        (item) => `
+          <article class="case-card" data-case-id="${item.id}">
+            <h3>${item.id} · ${item.offence}</h3>
+            <p>AI predicts ${item.predictedRisk} risk (${item.riskScore}% score, ${Math.round(Number(item.confidence) * 100)}% confidence). ${riskAction(item)}</p>
+            <div class="case-meta"><span>${item.district}</span><span>Current: ${item.currentRisk}</span><span>Predicted: ${item.predictedRisk}</span></div>
+          </article>`
+      )
+      .join("");
+    return;
+  }
+
   const ordered = [...selectedHotspots()].sort((a, b) => b.score - a.score);
   document.getElementById("prediction-list").innerHTML = ordered
     .map(
@@ -590,18 +680,25 @@ function exportToExcel() {
   XLSX.writeFile(workbook, `crime-analytics-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
-function showNotification(message, type = "info") {
+function showNotification(message, type = "info", duration = 5000) {
   const container = document.getElementById("notifications-center");
   if (!container) return;
   
   const notification = document.createElement("div");
   notification.className = `notification ${type}`;
-  notification.innerHTML = `
-    <span>${message}</span>
-    <button class="notification-close" aria-label="Close notification">&times;</button>
-  `;
+  const text = document.createElement("span");
+  text.textContent = message;
+  const close = document.createElement("button");
+  close.className = "notification-close";
+  close.type = "button";
+  close.setAttribute("aria-label", "Close notification");
+  close.textContent = "×";
+  notification.append(text, close);
   
   container.appendChild(notification);
+  while (container.children.length > 4) {
+    container.firstElementChild.remove();
+  }
   
   const closeBtn = notification.querySelector(".notification-close");
   closeBtn.addEventListener("click", () => {
@@ -614,7 +711,66 @@ function showNotification(message, type = "info") {
       notification.style.animation = "slideInRight 0.3s ease-out reverse";
       setTimeout(() => notification.remove(), 300);
     }
-  }, 5000);
+  }, duration);
+}
+
+function notifyAiFindings(data, manual = false) {
+  aiPredictions = data.predictions || [];
+  alerts = (data.findings || []).map((finding) => {
+    const caseText = finding.cases?.length ? ` Cases: ${finding.cases.join(", ")}.` : "";
+    return `${finding.message}${caseText}`;
+  });
+  renderSignals();
+  renderPredictions();
+
+  const alertCount = document.getElementById("active-alerts-count");
+  if (alertCount) alertCount.textContent = `${alerts.length} active AI alerts`;
+
+  if (manual) {
+    const source = data.autoTrained ? "AI auto-trained and scanned" : "AI model scan";
+    showNotification(`${source}: ${data.findings.length} finding${data.findings.length === 1 ? "" : "s"} across ${data.scanned} cases.`, "success", 4500);
+  }
+
+  aiPredictions.slice(0, manual ? 4 : 2).forEach((prediction) => {
+    const key = `${prediction.id}:${prediction.predictedRisk}:${Math.round(Number(prediction.riskScore))}`;
+    if (!manual && state.alertedCaseKeys.has(key)) return;
+    state.alertedCaseKeys.add(key);
+    showNotification(`${prediction.id}: ${prediction.predictedRisk} risk predicted for ${prediction.offence} in ${prediction.district}. ${riskAction(prediction)}`, prediction.predictedRisk === "High" ? "warning" : "info", 7000);
+  });
+
+  if (state.alertedCaseKeys.size > 80) {
+    state.alertedCaseKeys = new Set([...state.alertedCaseKeys].slice(-40));
+  }
+}
+
+async function refreshLiveMapData() {
+  try {
+    const response = await fetch('/api/data');
+    if (!response.ok) throw new Error(`API returned status ${response.status}`);
+    const data = await response.json();
+    districts = data.districts || districts;
+    cases = data.cases || cases;
+    trends = data.trends || trends;
+    hotspots = data.hotspots || hotspots;
+    timeline = data.timeline || timeline;
+  } catch (error) {
+    console.warn('Live map refresh failed.', error);
+  }
+}
+
+async function runAiAlertScan({ manual = false } = {}) {
+  if (state.scanInProgress) return;
+  state.scanInProgress = true;
+  try {
+    const response = await fetch('/api/alerts/scan');
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Alert scan failed.");
+    notifyAiFindings(data, manual);
+  } catch (error) {
+    if (manual) showNotification(error.message || "Alert scan failed.", "warning");
+  } finally {
+    state.scanInProgress = false;
+  }
 }
 
 async function renderSearch(query = "") {
@@ -1131,39 +1287,22 @@ function toggleRealtime() {
 
 function startRealtimeUpdates() {
   if (state.realtimeInterval) return;
-  
-  state.realtimeInterval = setInterval(() => {
-    // Simulate real-time data updates
-    if (Math.random() > 0.7) {
-      const newCase = {
-        id: `CASE-${String(Math.random()).slice(2, 6)}`,
-        district: districts[Math.floor(Math.random() * districts.length)].name,
-        offence: ["Vehicle theft", "Chain snatching", "Cyber fraud", "Burglary", "Robbery"][Math.floor(Math.random() * 5)],
-        suspect: `Suspect-${Math.floor(Math.random() * 1000)}`,
-        vehicle: `KA-${String(Math.floor(Math.random() * 100)).padStart(2, '0')}-XX-${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`,
-        phone: String(Math.floor(Math.random() * 9000000000) + 6000000000),
-        risk: ["High", "Medium", "Low"][Math.floor(Math.random() * 3)],
-        status: "Open",
-        summary: "Real-time case update from live monitoring system.",
-      };
-      cases.push(newCase);
-      showNotification(`📋 New case ${newCase.id} reported in ${newCase.district}`, "info");
-    }
-    
-    const alertCount = document.getElementById("active-alerts-count");
-    const activeAlerts = Math.floor(Math.random() * 8) + 2;
-    if (alertCount) alertCount.textContent = `${activeAlerts} active alerts`;
-    
-    hotspots.forEach(hs => {
-      hs.score = Math.max(49, Math.min(100, hs.score + (Math.random() - 0.5) * 3));
-    });
-    
+
+  runAiAlertScan();
+  state.realtimeInterval = setInterval(async () => {
+    await refreshLiveMapData();
+    await runAiAlertScan();
+
     if (document.getElementById("overview").classList.contains("active")) {
       renderKpis();
       renderTopDistricts();
       drawTrendChart();
     }
-  }, 8000);
+    if (document.getElementById("hotspots").classList.contains("active")) {
+      renderMap();
+      renderPredictions();
+    }
+  }, 15000);
 }
 
 function stopRealtimeUpdates() {
@@ -1359,16 +1498,14 @@ function bindEvents() {
     if (caseId) showCaseDetail(caseId);
   });
   document.getElementById("summarize-fir").addEventListener("click", extractFir);
-  document.getElementById("simulate-alert").addEventListener("click", () => {
+  document.getElementById("simulate-alert").addEventListener("click", async () => {
     const button = document.getElementById("simulate-alert");
-    button.disabled = true; button.textContent = "Scanning…";
-    fetch('/api/alerts/scan').then((response) => response.json()).then((data) => {
-      if (data.error) throw new Error(data.error);
-      alerts = data.findings.map((finding) => finding.message);
-      renderSignals();
-      showNotification(`Scan complete: ${data.findings.length} finding${data.findings.length === 1 ? "" : "s"} across ${data.scanned} cases.`, "success");
-    }).catch((error) => showNotification(error.message || "Alert scan failed.", "warning"))
-      .finally(() => { button.disabled = false; button.textContent = "Run Alert Scan"; });
+    button.disabled = true;
+    button.textContent = "AI monitoring...";
+    await runAiAlertScan({ manual: true });
+    if (!state.realtimeInterval && state.realtimeEnabled) startRealtimeUpdates();
+    button.disabled = false;
+    button.textContent = "Run Alert Scan";
   });
 
   document.getElementById("chat-form").addEventListener("submit", (event) => {
